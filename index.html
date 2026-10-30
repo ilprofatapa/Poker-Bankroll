@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1714">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PokerRoll">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>PokerRoll</title>
+<style>
+:root{--bg:#0f1714;--card:#17221d;--card2:#1e2c26;--line:#2a3a33;--tx:#e9f1ec;--mut:#8fa59a;--acc:#2fbf71;--acc2:#1f6b45;--gold:#e8b84a;--red:#ff6b6b;--yel:#f2c94c;--r:14px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(env(safe-area-inset-top) + 12px) 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0;font-weight:700}
+header h1 span{color:var(--acc)}
+#hdr{font-weight:700;font-variant-numeric:tabular-nums}
+main{padding:14px 16px calc(150px + env(safe-area-inset-bottom));max-width:720px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:5;background:#0b110e;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--mut);padding:9px 0 8px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:inherit}
+nav button .i{font-size:19px;line-height:1}
+nav button.on{color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.card h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin:0 0 10px;font-weight:600}
+.big{font-size:32px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0}
+.row+.row{border-top:1px solid var(--line)}
+.mut{color:var(--mut)} .sm{font-size:12.5px}
+.pos{color:var(--acc)} .neg{color:var(--red)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kpi{background:var(--card2);border-radius:10px;padding:9px 10px}
+.kpi b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.kpi span{font-size:11.5px;color:var(--mut)}
+.btn{background:var(--acc);color:#04130b;border:0;border-radius:10px;padding:11px 14px;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer}
+.btn.sec{background:var(--card2);color:var(--tx);border:1px solid var(--line)}
+.btn.dan{background:transparent;color:var(--red);border:1px solid #5a2a2a}
+.btn.full{width:100%}
+.btn.sm{padding:7px 10px;font-size:13px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btns .btn{flex:1}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{background:var(--card2);border:1px solid var(--line);color:var(--tx);padding:6px 11px;border-radius:20px;font-size:13px;font-family:inherit}
+.chip.on{background:var(--acc2);border-color:var(--acc)}
+.item{display:flex;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer}
+.item:first-child{border-top:0}
+.item .t{font-weight:600}
+.item .r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--card2);border:1px solid var(--line);color:var(--mut);margin:2px 4px 0 0;font-weight:500}
+.badge.w{color:var(--yel);border-color:#6b5a1c}
+.badge.g{color:var(--gold);border-color:#6b5a1c}
+.month{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;margin:16px 2px 6px}
+.light{display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:10px;background:var(--card2);margin-top:10px;font-size:14px}
+.dot{width:14px;height:14px;border-radius:50%;flex:none;margin-top:3px}
+.dot.g{background:var(--acc)} .dot.y{background:var(--yel)} .dot.r{background:var(--red)}
+.alert{border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:14px}
+.alert.r{background:#3a1a1a;border:1px solid #6b2a2a}
+.alert.y{background:#3a3218;border:1px solid #6b5a1c}
+.alert.g{background:#173a26;border:1px solid #1f6b40}
+table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:6px 4px;border-top:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mut);font-weight:600;font-size:12px;border-top:0}
+#modal{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center}
+#modal.open{display:flex}
+.sheet{background:var(--bg);width:100%;max-width:720px;max-height:94vh;overflow:auto;border-radius:18px 18px 0 0;border:1px solid var(--line);padding:16px 16px calc(24px + env(safe-area-inset-bottom))}
+.sheet h3{margin:0 0 12px;font-size:18px}
+label{display:block;font-size:12.5px;color:var(--mut);margin:10px 0 4px}
+input,select,textarea{width:100%;background:var(--card);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:10px;font-size:16px;font-family:inherit}
+input[type=date]{min-height:44px}
+textarea{min-height:64px}
+input[type=checkbox]{width:auto;margin:0 8px 0 0;transform:scale(1.2)}
+.chk{display:flex;align-items:center;color:var(--tx);font-size:14px;margin:12px 0 4px}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 10px}
+fieldset{border:1px solid var(--line);border-radius:12px;padding:2px 12px 12px;margin:14px 0 0}
+legend{color:var(--gold);font-size:13px;padding:0 6px}
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{flex:1;background:none;border:0;color:var(--mut);padding:8px;border-radius:8px;font-weight:600;font-size:14px;font-family:inherit}
+.seg button.on{background:var(--acc2);color:var(--tx)}
+form[data-kind=cash] .only-mtt,form[data-kind=mtt] .only-cash{display:none}
+.preview{background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:4px 12px;margin-top:14px;font-size:13.5px}
+.timer{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.empty{text-align:center;color:var(--mut);padding:28px 8px}
+svg.chart{width:100%;height:150px;display:block}
+.fab{position:fixed;right:16px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:6;width:56px;height:56px;border-radius:50%;background:var(--acc);color:#04130b;border:0;font-size:30px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.45);cursor:pointer}
+.hint{font-size:12.5px;color:var(--mut);margin-top:6px}
+pre{white-space:pre-wrap;font-size:12.5px;background:var(--card);padding:12px;border-radius:10px;border:1px solid var(--line);font-family:ui-monospace,Menlo,monospace}
+.back{margin-bottom:12px}
+</style>
+</head>
+<body>
+<header><h1>Poker<span>Roll</span></h1><div id="hdr"></div></header>
+<main id="app"></main>
+<nav id="nav"></nav>
+<div id="modal"><div class="sheet" id="sheet"></div></div>
+<input type="file" id="impFile" accept=".json,application/json" style="display:none" onchange="doImport(this)">
+<script>
+'use strict';
+/* =================== Utilità =================== */
+const KEY='pokerroll_v1';
+const $=s=>document.querySelector(s);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function isoLocal(d){d=new Date(d);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+const today=()=>isoLocal(new Date());
+function daysAgo(n){const d=new Date();d.setDate(d.getDate()-n);return isoLocal(d)}
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=v=>{const n=parseFloat(String(v??'').replace(/\s/g,'').replace(',','.'));return isFinite(n)?n:0};
+function money(v,sign){const f=new Intl.NumberFormat('it-IT',{style:'currency',currency:S.settings.currency||'EUR'}).format(v||0);return sign&&v>0.004?'+'+f:f}
+const pc=v=>isFinite(v)?(v*100).toFixed(1).replace('.',',')+'%':'—';
+const n1=v=>isFinite(v)?(Math.round(v*10)/10).toString().replace('.',','):'—';
+const fdate=d=>d?d.split('-').reverse().join('/'):'';
+const cl=v=>v>0.004?'pos':v<-0.004?'neg':'';
+const MESI=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+const inp=(n,v,ph='',im='decimal')=>`<input name="${n}" inputmode="${im}" value="${esc(v??'')}" placeholder="${esc(ph)}" autocomplete="off">`;
+const opt=(v,l,sel)=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(l)}</option>`;
+
+/* =================== Costanti =================== */
+const FORMATS={cash_live:'Cash live',cash_online:'Cash online',mtt_live:'Tornei live',mtt_online:'Tornei online',sng:'Sit & Go'};
+const PRESETS={
+ Conservativo:{cash_live:40,cash_online:50,mtt_live:150,mtt_online:200,sng:75,moveDownPct:20},
+ Standard:{cash_live:30,cash_online:40,mtt_live:100,mtt_online:150,sng:50,moveDownPct:25},
+ Aggressivo:{cash_live:20,cash_online:25,mtt_live:50,mtt_online:80,sng:30,moveDownPct:30}};
+const TTYPES=['Freezeout','Re-entry','PKO / Bounty','Turbo / Hyper','Deepstack','Satellite','SNG'];
+const GAMES=['NLH','PLO','PLO5','Mixed','Altro'];
+const TXT={deposit:'Deposito',withdraw:'Prelievo',transfer:'Trasferimento tra conti',bonus:'Bonus / promo',rakeback:'Rakeback',expense:'Spesa',adjust:'Rettifica'};
+const EXPCAT=['Viaggio','Alloggio','Vitto','Mance','Altro'];
+const HINT={deposit:'Soldi aggiunti al roll dai tuoi fondi personali. Non contano come vincita.',
+ withdraw:'Soldi tolti dal roll per uso personale. Non contano come perdita.',
+ transfer:'Spostamento tra conti (es. contanti → sito online). Il roll totale non cambia.',
+ bonus:'Bonus, promozioni, ticket convertiti: aumentano il roll ma restano separati dal risultato al tavolo.',
+ rakeback:'Rakeback o cashback del sito: aumenta il roll, separato dal risultato al tavolo.',
+ expense:'Viaggio, alloggio, vitto, mance… Se non la paghi con i soldi del roll viene contata solo nei costi della trasferta.',
+ adjust:'Correzione del saldo (es. differenza di cambio o errore di conteggio).'};
+
+/* =================== Stato =================== */
+function defState(){return{v:1,settings:{currency:'EUR',name:'',lastBackup:''},
+ accounts:[{id:'acc_live',name:'Contanti (live)',type:'live',archived:false}],
+ tx:[],sessions:[],deals:[],trips:[],
+ risk:[{id:uid(),from:'2000-01-01',name:'Standard',...PRESETS.Standard,stopLoss:0}],live:null}}
+function load(){try{const r=JSON.parse(localStorage.getItem(KEY));if(r&&r.v){const d=defState();return{...d,...r,settings:{...d.settings,...r.settings}}}}catch(e){}return defState()}
+let S=load();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert('Impossibile salvare i dati: '+e.message)}}
+const UI={tab:'home',sub:null,sesFilter:'all',stat:{period:'all',env:'all',kind:'mtt'},lastKind:null,lastAcc:null,fromLive:false};
+let _R=null;
+
+/* =================== Calcoli sessione =================== */
+const acc=id=>S.accounts.find(a=>a.id===id);
+const setting=s=>(acc(s.accountId)||{}).type==='online'?'online':'live';
+function cost(s){if(s.kind==='cash')return num(s.buyIn);return Math.max(1,num(s.entries)||1)*(num(s.tBuyIn)+num(s.tFee))+num(s.rebuys)*num(s.rebuyCost)+num(s.addons)*num(s.addonCost)}
+function ret(s){return s.kind==='cash'?num(s.cashOut):num(s.prize)+num(s.bounty)}
+const gross=s=>ret(s)-cost(s);
+function fkey(s){if(s.kind==='cash')return'cash_'+setting(s);if(s.ttype==='SNG')return'sng';return'mtt_'+setting(s)}
+function unitBuyIn(s){return s.kind==='cash'?100*num(s.bb):num(s.tBuyIn)+num(s.tFee)}
+function sessLabel(s){if(s.kind==='cash')return`Cash ${s.game||'NLH'} ${n1(num(s.sb))}/${n1(num(s.bb))}`;return s.name||`Torneo ${money(unitBuyIn(s))}`}
+const byDate=(a,b)=>(a.date||'').localeCompare(b.date||'')||(a.ts||0)-(b.ts||0);
+const asc=arr=>[...arr].sort(byDate);
+const desc=arr=>[...arr].sort((a,b)=>byDate(b,a));
+function dealDesc(d){return d.type==='quote'?`Vendita quote: ${n1(num(d.pct))}% predefinita, markup ${String(num(d.markup)||1).replace('.',',')}`
+ :`Il backer paga i buy-in, utile diviso ${n1(num(d.playerShare))}% al giocatore${d.makeup?', con makeup':', senza makeup'}`}
+
+function stakeCalc(s,R){
+ const c=cost(s),r=ret(s),g=r-c;const st=s.stake;const d=st&&st.dealId&&S.deals.find(x=>x.id===st.dealId);
+ if(!d)return{player:g,backer:0,gross:g,staked:false};
+ const D=R.deals[d.id];D.n++;D.ret+=r;
+ if(d.type==='quote'){
+  const p=Math.min(100,Math.max(0,num(st.pct??d.pct)))/100,m=num(d.markup)||1;
+  const player=(1-p)*g+p*c*(m-1),backer=p*r-p*c*m;
+  D.invested+=p*c*m;D.player+=player;D.backer+=backer;
+  return{player,backer,gross:g,staked:true,deal:d,pct:p*100};
+ }
+ const sh=Math.min(100,Math.max(0,num(d.playerShare)))/100;D.invested+=c;let player;
+ if(d.makeup){if(g<0){D.makeup+=-g;player=0}else{const rep=Math.min(D.makeup,g);D.makeup-=rep;player=(g-rep)*sh}}
+ else player=g>0?g*sh:0;
+ const backer=g-player;D.player+=player;D.backer+=backer;
+ return{player,backer,gross:g,staked:true,deal:d,makeupAfter:D.makeup};
+}
+function profileAt(d){const ps=[...S.risk].sort((a,b)=>a.from.localeCompare(b.from));let p=ps[0];for(const x of ps)if(x.from<=d)p=x;return p}
+const curProfile=()=>profileAt(today());
+function riskCheck(s,rollBefore,r){
+ const p=profileAt(s.date||today());const fk=fkey(s);
+ if(r.staked&&r.deal.type==='split')return{na:true,p,fk};
+ let unit=unitBuyIn(s);if(r.staked&&r.deal.type==='quote')unit*=1-r.pct/100;
+ const req=num(p[fk])*unit;return{ok:rollBefore+1e-9>=req,req,p,fk};
+}
+function compute(){
+ const R={sess:{},deals:{},acc:{},roll:0,tl:[],game:0,promo:0,exp:0,dep:0,wd:0,cum:0,peak:0,dd:0,ddPct:0,todayNet:0,month:0};
+ S.deals.forEach(d=>R.deals[d.id]={makeup:0,invested:0,ret:0,player:0,backer:0,n:0});
+ S.accounts.forEach(a=>R.acc[a.id]=0);
+ const add=(id,v)=>{R.acc[id]=(R.acc[id]||0)+v};
+ const ev=[];
+ S.sessions.forEach(s=>ev.push({d:s.date||'',ts:s.ts||0,s}));
+ S.tx.forEach(t=>ev.push({d:t.date||'',ts:t.ts||0,t}));
+ ev.sort((a,b)=>a.d.localeCompare(b.d)||a.ts-b.ts);
+ let roll=0,cum=0,peak=0;const td=today(),mo=td.slice(0,7);
+ for(const e of ev){
+  if(e.s){const s=e.s,r=stakeCalc(s,R);
+   R.sess[s.id]={...r,rollBefore:roll,risk:riskCheck(s,roll,r)};
+   roll+=r.player;cum+=r.player;R.game+=r.player;add(s.accountId,r.player);
+   if(s.date===td)R.todayNet+=r.player;if((s.date||'').slice(0,7)===mo)R.month+=r.player;
+  }else{const t=e.t,a=num(t.amount);
+   switch(t.type){
+    case'deposit':roll+=a;R.dep+=a;add(t.accountId,a);break;
+    case'withdraw':roll-=a;R.wd+=a;add(t.accountId,-a);break;
+    case'transfer':add(t.accountId,-a);add(t.toId,a);break;
+    case'bonus':case'rakeback':roll+=a;cum+=a;R.promo+=a;add(t.accountId,a);break;
+    case'expense':R.exp+=a;if(t.fromRoll!==false){roll-=a;cum-=a;add(t.accountId,-a)}break;
+    case'adjust':roll+=a;add(t.accountId,a);break;}
+  }
+  if(cum>peak)peak=cum;
+  R.tl.push({d:e.d,roll,cum});
+ }
+ R.roll=roll;R.cum=cum;R.peak=peak;R.dd=peak-cum;R.ddPct=R.dd>0&&roll+R.dd>0?R.dd/(roll+R.dd):0;
+ return R;
+}
+
+/* =================== Statistiche =================== */
+function cashStats(L){
+ let H=0,G=0,BB=0,Hbb=0,wins=0;
+ L.forEach(s=>{const h=num(s.hours),g=gross(s);H+=h;G+=g;if(num(s.bb)>0&&h>0){BB+=g/num(s.bb);Hbb+=h}if(g>0)wins++});
+ const w=H>0?G/H:0;let ss=0,k=0;
+ L.forEach(s=>{const h=num(s.hours);if(h>0){ss+=Math.pow(gross(s)-w*h,2)/h;k++}});
+ const sd=k>1?Math.sqrt(ss/(k-1)):0,se=H>0?sd/Math.sqrt(H):0;
+ return{n:L.length,H,G,w,bbh:Hbb>0?BB/Hbb:NaN,winPct:L.length?wins/L.length:0,sd,lo:w-1.96*se,hi:w+1.96*se,k};
+}
+function mttStats(L){
+ let C=0,Rt=0,itm=0,entries=0,bounty=0;const rois=[];
+ L.forEach(s=>{const c=cost(s),r=ret(s);C+=c;Rt+=r;if(num(s.prize)>0)itm++;entries+=Math.max(1,num(s.entries)||1);bounty+=num(s.bounty);if(c>0)rois.push((r-c)/c)});
+ const n=L.length,roi=C>0?(Rt-C)/C:0;
+ const m=rois.reduce((a,b)=>a+b,0)/(rois.length||1);
+ const sd=rois.length>1?Math.sqrt(rois.reduce((a,b)=>a+(b-m)**2,0)/(rois.length-1)):0,se=rois.length?sd/Math.sqrt(rois.length):0;
+ return{n,C,R:Rt,P:Rt-C,roi,itm:n?itm/n:0,abi:n?C/n:0,reN:n?(entries-n)/n:0,bounty,sd,lo:roi-1.96*se,hi:roi+1.96*se};
+}
+function bucket(v){const c=money(0).replace(/[\d\s,.]/g,'');if(v<=0)return'Freeroll';if(v<=20)return`fino a 20${c}`;if(v<=50)return`21–50${c}`;if(v<=110)return`51–110${c}`;if(v<=300)return`111–300${c}`;if(v<=600)return`301–600${c}`;return`oltre 600${c}`}
+
+/* =================== Render =================== */
+function render(){
+ _R=compute();const R=_R;
+ $('#hdr').innerHTML=`<span class="${R.roll<0?'neg':''}">${money(R.roll)}</span>`;
+ $('#nav').innerHTML=[['home','◆','Home'],['sess','♠','Sessioni'],['stats','▲','Statistiche'],['roll','€','Roll'],['more','☰','Altro']]
+  .map(([k,i,l])=>`<button data-act="tab" data-k="${k}" class="${UI.tab===k?'on':''}"><span class="i">${i}</span>${l}</button>`).join('');
+ $('#app').innerHTML={home:vHome,sess:vSess,stats:vStats,roll:vRoll,more:vMore}[UI.tab](R);
+}
+const kpi=(l,v,c='')=>`<div class="kpi"><span>${l}</span><b class="${c}">${v}</b></div>`;
+
+/* ---------- Home ---------- */
+function elapsed(){if(!S.live)return'';const t=Math.floor((Date.now()-S.live.start)/1000);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
+function vHome(R){
+ const p=curProfile();let h='';
+ if(!S.sessions.length&&!S.tx.length)h+=`<div class="card"><h2>Benvenuto</h2><p style="margin-top:0">Per iniziare: <b>1)</b> registra il tuo roll di partenza con un deposito; <b>2)</b> controlla il tuo profilo di rischio in Altro; <b>3)</b> aggiungi i conti dei siti online in Roll, se giochi online.</p><div class="btns"><button class="btn" data-act="newTx" data-type="deposit">Registra roll iniziale</button></div></div>`;
+ if(num(p.stopLoss)>0&&-R.todayNet>=num(p.stopLoss))h+=`<div class="alert r"><b>Stop-loss raggiunto.</b> Oggi hai perso ${money(-R.todayNet)} (limite ${money(num(p.stopLoss))}). La regola dice di fermarsi per oggi.</div>`;
+ if(R.dd>0&&R.ddPct*100>=num(p.moveDownPct))h+=`<div class="alert y"><b>Downswing del ${pc(R.ddPct)}</b> dal tuo massimo (${money(R.dd)}). Il tuo profilo prevede di valutare un passo indietro di livello oltre il ${n1(num(p.moveDownPct))}%.</div>`;
+ const lb=S.settings.lastBackup;if(S.sessions.length+S.tx.length>3&&(!lb||lb<daysAgo(14)))h+=`<div class="alert y">I dati sono solo su questo telefono. ${lb?'Ultimo backup il '+fdate(lb)+'.':'Non hai ancora fatto un backup.'} <a href="#" data-act="sub" data-k="backup" style="color:var(--gold)">Fai un backup</a></div>`;
+ const accs=S.accounts.filter(a=>!a.archived||Math.abs(R.acc[a.id]||0)>0.004);
+ h+=`<div class="card"><h2>Bankroll</h2><div class="big ${R.roll<0?'neg':''}">${money(R.roll)}</div>${accs.length>1?accs.map(a=>`<div class="row sm"><span class="mut">${esc(a.name)}</span><span>${money(R.acc[a.id]||0)}</span></div>`).join(''):''}</div>`;
+ h+=S.live?`<div class="card"><h2>Sessione live in corso</h2><div class="timer" id="timer">${elapsed()}</div><div class="btns" style="margin-top:10px"><button class="btn" data-act="endLive">Termina e registra</button><button class="btn sec" data-act="cancelLive">Annulla</button></div></div>`
+  :`<button class="btn sec full" style="margin-bottom:12px" data-act="startLive">▶ Avvia cronometro sessione</button>`;
+ h+=`<div class="card"><h2>Risultati</h2><div class="grid2">${kpi('Risultato di gioco',money(R.game,1),cl(R.game))}${kpi('Questo mese',money(R.month,1),cl(R.month))}${kpi('Bonus e rakeback',money(R.promo))}${kpi('Spese registrate',money(R.exp))}</div><div class="hint">Il risultato di gioco è la tua quota personale, già al netto delle quote dei backer.</div></div>`;
+ h+=vCanPlay(R,p);
+ if(R.tl.length>1)h+=`<div class="card"><h2>Andamento del roll</h2>${chart(R.tl.map(x=>x.roll))}</div>`;
+ return h;
+}
+function vCanPlay(R,p){
+ const rows=Object.entries(FORMATS).map(([k,l])=>{const bi=num(p[k]);const max=bi>0?Math.max(0,R.roll)/bi:0;
+  const extra=k.startsWith('cash')?`<div class="sm mut">big blind fino a ${n1(max/100)}</div>`:'';
+  return`<div class="row"><div>${l}<div class="sm mut">${bi} buy-in richiesti</div></div><div style="text-align:right"><b>${money(max)}</b>${extra}</div></div>`}).join('');
+ return`<div class="card"><h2>Cosa puoi giocare · profilo ${esc(p.name)}</h2><div class="sm mut" style="margin-bottom:4px">Buy-in massimo per evento con il roll attuale</div>${rows}
+ <div style="margin-top:12px"><div class="f2"><div><label>Formato</label><select id="chkF">${Object.entries(FORMATS).map(([k,l])=>opt(k,l,'mtt_live')).join('')}</select></div><div><label id="chkL">Buy-in (€) o big blind</label><input id="chkV" inputmode="decimal" placeholder="es. 150"></div></div>
+ <button class="btn sec full" style="margin-top:10px" data-act="check">Posso giocarlo?</button><div id="chkRes"></div></div></div>`;
+}
+function checkPlay(){
+ const R=_R,p=curProfile(),fk=$('#chkF').value,v=num($('#chkV').value);
+ if(!(v>0))return $('#chkRes').innerHTML=`<div class="light"><span class="dot y"></span><div>Inserisci il buy-in (per il cash: la big blind).</div></div>`;
+ const unit=fk.startsWith('cash')?100*v:v,req=num(p[fk])*unit,ratio=req>0?R.roll/req:1;
+ const sl=num(p.stopLoss)>0&&-R.todayNet>=num(p.stopLoss);
+ let c,t;
+ if(sl){c='r';t=`Stop-loss di oggi già raggiunto: la regola dice di non giocare più oggi.`}
+ else if(ratio>=1){c='g';t=`Sì. Servono ${money(req)} di roll, ne hai ${money(R.roll)}.`}
+ else if(ratio>=0.75){c='y';t=`Al limite: servono ${money(req)}, hai ${money(R.roll)} (${pc(ratio)}). Solo come "shot" ragionato, con la regola di scendere subito se va male.`}
+ else{c='r';t=`No. Servono ${money(req)}, hai ${money(R.roll)} (${pc(ratio)}). Il livello è troppo alto per il tuo roll.`}
+ $('#chkRes').innerHTML=`<div class="light"><span class="dot ${c}"></span><div>${t}</div></div>`;
+}
+function chart(vals){
+ const W=600,H=150,P=8;let mn=Math.min(...vals),mx=Math.max(...vals);if(mx-mn<1){mx+=1;mn-=1}
+ const sx=i=>P+i*(W-2*P)/Math.max(1,vals.length-1),sy=v=>H-P-(v-mn)*(H-2*P)/((mx-mn)||1);
+ const pts=vals.map((v,i)=>sx(i).toFixed(1)+','+sy(v).toFixed(1)).join(' ');
+ return`<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${mn<0&&mx>0?`<line x1="0" x2="${W}" y1="${sy(0).toFixed(1)}" y2="${sy(0).toFixed(1)}" stroke="#2a3a33" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`:''}<polyline points="${pts}" fill="none" stroke="#2fbf71" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg><div class="row sm mut"><span>min ${money(Math.min(...vals))}</span><span>max ${money(Math.max(...vals))}</span></div>`;
+}
+
+/* ---------- Sessioni ---------- */
+function vSess(R){
+ const f=UI.sesFilter;
+ const chip=(k,l)=>`<button class="chip ${f===k?'on':''}" data-act="sf" data-k="${k}">${l}</button>`;
+ let h=`<div class="chips">${chip('all','Tutte')}${chip('mtt','Tornei')}${chip('cash','Cash')}${chip('live','Live')}${chip('online','Online')}${chip('staked','Con staking')}</div>`;
+ const L=desc(S.sessions).filter(s=>f==='all'||s.kind===f||setting(s)===f||(f==='staked'&&R.sess[s.id]?.staked));
+ if(!L.length)h+=`<div class="empty">Nessuna sessione.<br>Usa il tasto + per registrarne una.</div>`;
+ const groups={};L.forEach(s=>{const k=(s.date||'').slice(0,7);(groups[k]=groups[k]||[]).push(s)});
+ for(const k of Object.keys(groups)){
+  const tot=groups[k].reduce((a,s)=>a+(R.sess[s.id]?.player||0),0);const [y,m]=k.split('-');
+  h+=`<div class="month"><span>${MESI[+m-1]||''} ${y}</span><span class="${cl(tot)}">${money(tot,1)}</span></div><div class="card" style="padding:4px 14px">`;
+  h+=groups[k].map(s=>{const x=R.sess[s.id]||{};const tr=S.trips.find(t=>t.id===s.tripId);
+   const sub=[fdate(s.date),s.venue,s.kind==='mtt'&&num(s.entries)>1?num(s.entries)+' ingressi':'',s.kind==='mtt'&&num(s.position)?`${num(s.position)}°${num(s.field)?' su '+num(s.field):''}`:'',num(s.hours)?n1(num(s.hours))+' h':''].filter(Boolean).map(esc).join(' · ');
+   const b=[x.staked?`<span class="badge g">staking ${esc(x.deal.backer)}</span>`:'',x.risk&&x.risk.ok===false?'<span class="badge w">sopra il limite</span>':'',tr?`<span class="badge">${esc(tr.name)}</span>`:''].join('');
+   return`<div class="item" data-act="editSess" data-id="${s.id}"><div><div class="t">${esc(sessLabel(s))}</div><div class="sm mut">${sub}</div>${b}</div><div class="r"><b class="${cl(x.player)}">${money(x.player,1)}</b>${x.staked?`<div class="sm mut">al tavolo ${money(x.gross,1)}</div>`:''}</div></div>`}).join('');
+  h+=`</div>`;
+ }
+ return h+`<button class="fab" data-act="newSess" aria-label="Nuova sessione">+</button>`;
+}
+function sessForm(s){
+ const isNew=!s||!s.id;
+ s={kind:UI.lastKind||'mtt',date:today(),accountId:UI.lastAcc||S.accounts.find(a=>!a.archived)?.id,entries:1,game:'NLH',ttype:'Freezeout',...(s||{})};
+ const st=s.stake||{};
+ const accO=S.accounts.filter(a=>!a.archived||a.id===s.accountId).map(a=>opt(a.id,a.name,s.accountId)).join('');
+ const venues=[...new Set(S.sessions.map(x=>x.venue).filter(Boolean))];
+ const deals=S.deals.filter(d=>d.active!==false||d.id===st.dealId);
+ return`<h3>${isNew?'Nuova sessione':'Modifica sessione'}</h3>
+<form id="mform" data-kind="${s.kind}" data-id="${s.id||''}" onsubmit="return false" oninput="sessPreview()">
+<input type="hidden" name="kind" value="${s.kind}">
+<div class="seg"><button type="button" data-act="kind" data-k="mtt" class="${s.kind==='mtt'?'on':''}">Torneo</button><button type="button" data-act="kind" data-k="cash" class="${s.kind==='cash'?'on':''}">Cash game</button></div>
+<div class="f2"><div><label>Data</label><input type="date" name="date" value="${esc(s.date)}"></div><div><label>Conto</label><select name="accountId">${accO}</select></div></div>
+<label>Luogo / sito</label><input name="venue" list="venues" value="${esc(s.venue)}" placeholder="es. Casinò di Sanremo" autocomplete="off"><datalist id="venues">${venues.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
+<div class="f2"><div><label>Gioco</label><select name="game">${GAMES.map(g=>opt(g,g,s.game)).join('')}</select></div><div><label>Ore giocate</label>${inp('hours',s.hours,'es. 4,5')}</div></div>
+<fieldset class="only-cash"><legend>Cash game</legend>
+ <div class="f2"><div><label>Small blind</label>${inp('sb',s.sb,'1')}</div><div><label>Big blind</label>${inp('bb',s.bb,'2')}</div></div>
+ <div class="f2"><div><label>Totale investito (buy-in + ricariche)</label>${inp('buyIn',s.buyIn,'0')}</div><div><label>Cash-out</label>${inp('cashOut',s.cashOut,'0')}</div></div>
+</fieldset>
+<fieldset class="only-mtt"><legend>Torneo</legend>
+ <label>Nome del torneo</label>${inp('name',s.name,'es. Main Event','text')}
+ <div class="f2"><div><label>Tipo</label><select name="ttype">${TTYPES.map(t=>opt(t,t,s.ttype)).join('')}</select></div><div><label>Iscritti totali</label>${inp('field',s.field,'','numeric')}</div></div>
+ <div class="f2"><div><label>Buy-in (quota montepremi)</label>${inp('tBuyIn',s.tBuyIn,'es. 135')}</div><div><label>Fee / rake</label>${inp('tFee',s.tFee,'es. 15')}</div></div>
+ <div class="f3"><div><label>Ingressi</label>${inp('entries',s.entries,'1','numeric')}</div><div><label>N. rebuy</label>${inp('rebuys',s.rebuys,'0','numeric')}</div><div><label>Costo rebuy</label>${inp('rebuyCost',s.rebuyCost,'0')}</div></div>
+ <div class="hint">Ingressi = 1 + numero di re-entry.</div><div class="f2"><div><label>N. add-on</label>${inp('addons',s.addons,'0','numeric')}</div><div><label>Costo add-on</label>${inp('addonCost',s.addonCost,'0')}</div></div>
+ <div class="f3"><div><label>Premio</label>${inp('prize',s.prize,'0')}</div><div><label>Bounty vinte</label>${inp('bounty',s.bounty,'0')}</div><div><label>Posizione</label>${inp('position',s.position,'','numeric')}</div></div>
+</fieldset>
+<fieldset><legend>Staking e trasferta</legend>
+ <label>Accordo di staking</label><select name="dealId"><option value="">Nessuno (gioco con i miei soldi)</option>${deals.map(d=>opt(d.id,`${d.backer} – ${d.type==='quote'?'vendita quote':'backing'}`,st.dealId)).join('')}</select>
+ <div id="pctWrap"><label>% di quote vendute in questa sessione (vuoto = predefinita)</label>${inp('pct',st.pct,'')}</div>
+ <label>Trasferta</label><select name="tripId"><option value="">Nessuna</option>${desc(S.trips.map(t=>({...t,date:t.from}))).map(t=>opt(t.id,t.name,s.tripId)).join('')}</select>
+</fieldset>
+<label>Note (come hai giocato, errori, stato mentale…)</label><textarea name="notes">${esc(s.notes)}</textarea>
+<div class="preview" id="pv"></div>
+<div class="btns" style="margin-top:14px"><button class="btn" data-act="saveSess">Salva</button><button type="button" class="btn sec" data-act="close">Annulla</button></div>
+${isNew?'':`<button type="button" class="btn dan full" style="margin-top:10px" data-act="delSess" data-id="${s.id}">Elimina sessione</button>`}
+</form>`;
+}
+function formToSess(f,base){
+ const s={...base,kind:f.kind,date:f.date,accountId:f.accountId,venue:(f.venue||'').trim(),game:f.game,hours:num(f.hours),notes:f.notes||'',tripId:f.tripId||'',
+  stake:f.dealId?{dealId:f.dealId,pct:(f.pct===''||f.pct==null)?null:num(f.pct)}:null};
+ if(f.kind==='cash')Object.assign(s,{sb:num(f.sb),bb:num(f.bb),buyIn:num(f.buyIn),cashOut:num(f.cashOut)});
+ else Object.assign(s,{name:(f.name||'').trim(),ttype:f.ttype,field:num(f.field),tBuyIn:num(f.tBuyIn),tFee:num(f.tFee),entries:Math.max(1,Math.round(num(f.entries))||1),
+  rebuys:num(f.rebuys),rebuyCost:num(f.rebuyCost),addons:num(f.addons),addonCost:num(f.addonCost),prize:num(f.prize),bounty:num(f.bounty),position:num(f.position)});
+ return s;
+}
+function sessPreview(){
+ const f=$('#mform');if(!f)return;const o=Object.fromEntries(new FormData(f));const s=formToSess(o,{});
+ const d=S.deals.find(x=>x.id===o.dealId);$('#pctWrap').style.display=d&&d.type==='quote'?'':'none';
+ const c=cost(s),r=ret(s),g=r-c;let extra='';
+ if(d){if(d.type==='quote'){const p=(o.pct===''?num(d.pct):num(o.pct))/100,m=num(d.markup)||1,pl=(1-p)*g+p*c*(m-1);
+   extra=`<div class="row"><span>Tua quota</span><b class="${cl(pl)}">${money(pl,1)}</b></div><div class="row"><span>Quota del backer</span><b>${money(p*r-p*c*m,1)}</b></div>`}
+  else extra=`<div class="row sm mut"><span>Il backer copre i costi: la tua quota viene calcolata al salvataggio, tenendo conto dell'eventuale makeup.</span></div>`}
+ $('#pv').innerHTML=`<div class="row"><span>Costo totale</span><b>${money(c)}</b></div><div class="row"><span>Incasso</span><b>${money(r)}</b></div><div class="row"><span>Risultato al tavolo</span><b class="${cl(g)}">${money(g,1)}</b></div>${extra}`;
+}
+function saveSess(){
+ const f=$('#mform'),o=Object.fromEntries(new FormData(f)),id=f.dataset.id;
+ if(!o.date)return alert('Inserisci la data.');
+ if(!o.accountId)return alert('Crea prima un conto nella sezione Roll.');
+ const old=S.sessions.find(x=>x.id===id);
+ const s=formToSess(o,{id:id||uid(),ts:old&&old.ts||Date.now()});
+ if(s.kind==='mtt'&&!(s.tBuyIn+s.tFee>0)&&!confirm('Il buy-in è zero (freeroll?). Salvare comunque?'))return;
+ if(s.kind==='cash'&&!(s.bb>0)&&!confirm('Non hai indicato i bui: le statistiche in big blind non saranno disponibili. Salvare comunque?'))return;
+ if(old)S.sessions[S.sessions.indexOf(old)]=s;else S.sessions.push(s);
+ UI.lastKind=s.kind;UI.lastAcc=s.accountId;
+ if(UI.fromLive)S.live=null;
+ save();closeModal();render();
+}
+function delSess(d){if(!confirm('Eliminare questa sessione?'))return;S.sessions=S.sessions.filter(s=>s.id!==d.id);save();closeModal();render()}
+
+/* ---------- Statistiche ---------- */
+function statList(){
+ const f=UI.stat,y=+today().slice(0,4);let from='',to='9999';
+ if(f.period==='30')from=daysAgo(30);else if(f.period==='90')from=daysAgo(90);else if(f.period==='ytd')from=y+'-01-01';else if(f.period==='ly'){from=(y-1)+'-01-01';to=(y-1)+'-12-31'}
+ return S.sessions.filter(s=>s.kind===f.kind&&(f.env==='all'||setting(s)===f.env)&&(s.date||'')>=from&&(s.date||'')<=to);
+}
+function vStats(R){
+ const f=UI.stat,chip=(g,k,l)=>`<button class="chip ${f[g]===k?'on':''}" data-act="st" data-g="${g}" data-k="${k}">${l}</button>`;
+ let h=`<div class="seg" style="margin-bottom:10px">${['mtt','cash'].map(k=>`<button data-act="st" data-g="kind" data-k="${k}" class="${f.kind===k?'on':''}">${k==='mtt'?'Tornei':'Cash game'}</button>`).join('')}</div>
+ <div class="chips">${chip('period','all','Sempre')}${chip('period','30','30 giorni')}${chip('period','90','90 giorni')}${chip('period','ytd',"Quest'anno")}${chip('period','ly','Anno scorso')}</div>
+ <div class="chips">${chip('env','all','Live + online')}${chip('env','live','Solo live')}${chip('env','online','Solo online')}</div>`;
+ const L=statList();if(!L.length)return h+`<div class="empty">Nessuna sessione con questi filtri.</div>`;
+ const personal=L.reduce((a,s)=>a+(R.sess[s.id]?.player||0),0);
+ return h+(f.kind==='cash'?vCashStats(L,personal):vMttStats(L,personal))+`<div class="hint" style="margin:4px 2px 12px">Le statistiche misurano il risultato "al tavolo" (100% dell'azione), perché servono a capire come giochi. La tua quota personale tiene conto anche dello staking.</div>`;
+}
+function vMttStats(L,personal){
+ const m=mttStats(L);
+ let h=`<div class="card"><h2>Riepilogo tornei</h2><div class="grid2">${kpi('Tornei',m.n)}${kpi('ROI',pc(m.roi),cl(m.roi))}${kpi('Profitto al tavolo',money(m.P,1),cl(m.P))}${kpi('Tua quota',money(personal,1),cl(personal))}${kpi('ITM (a premio)',pc(m.itm))}${kpi('Costo medio per torneo',money(m.abi))}${kpi('Re-entry medi per torneo',n1(m.reN))}${kpi('Bounty vinte',money(m.bounty))}${kpi('Totale investito',money(m.C))}${kpi('Totale incassato',money(m.R))}</div></div>`;
+ h+=verdictCard('mtt',m.n,m.lo,m.hi,pc(m.lo),pc(m.hi),'ROI');
+ h+=breakdown(L,'mtt',s=>s.venue||'—','Per luogo / sito');
+ h+=breakdown(L,'mtt',s=>bucket(unitBuyIn(s)),'Per fascia di buy-in');
+ h+=breakdown(L,'mtt',s=>s.ttype||'—','Per tipo di torneo');
+ h+=breakdown(L,'mtt',s=>num(s.entries)>1?'Con re-entry':'Un solo ingresso','Re-entry: conviene?');
+ return h;
+}
+function vCashStats(L,personal){
+ const c=cashStats(L);
+ let h=`<div class="card"><h2>Riepilogo cash game</h2><div class="grid2">${kpi('Sessioni',c.n)}${kpi('Ore giocate',n1(c.H))}${kpi('Risultato al tavolo',money(c.G,1),cl(c.G))}${kpi('Tua quota',money(personal,1),cl(personal))}${kpi('Guadagno orario',money(c.w,1)+'/h',cl(c.w))}${kpi('Big blind all\'ora',isFinite(c.bbh)?n1(c.bbh)+' bb/h':'—',cl(c.bbh))}${kpi('Sessioni vinte',pc(c.winPct))}${kpi('Deviazione std oraria',c.k>1?money(c.sd)+'/h':'—')}</div></div>`;
+ h+=c.H>0?verdictCard('cash',Math.round(c.H),c.lo,c.hi,money(c.lo)+'/h',money(c.hi)+'/h','Guadagno orario'):'<div class="alert y">Inserisci le ore giocate per calcolare guadagno orario e affidabilità.</div>';
+ h+=breakdown(L,'cash',s=>s.venue||'—','Per luogo / sito');
+ h+=breakdown(L,'cash',s=>`${s.game||'NLH'} ${n1(num(s.sb))}/${n1(num(s.bb))}`,'Per livello');
+ h+=breakdown(L,'cash',s=>num(s.hours)>=6?'Oltre 6 ore':num(s.hours)>=3?'Da 3 a 6 ore':'Meno di 3 ore','Per durata della sessione');
+ return h;
+}
+function verdictCard(kind,size,lo,hi,loT,hiT,metric){
+ const th=kind==='mtt'?[100,500]:[200,1000],unit=kind==='mtt'?'tornei':'ore';
+ const sample=size<th[0]?['r',`Campione molto piccolo (${size} ${unit}): i numeri sono dominati dalla fortuna. Non trarre conclusioni.`]
+  :size<th[1]?['y',`Campione limitato (${size} ${unit}): indica solo una tendenza.`]:['g',`Campione discreto (${size} ${unit}).`];
+ const v=size<2?"Servono più dati per stimare l'intervallo.":lo>0?'Con buona probabilità sei vincente in questo formato.':hi<0?'Con buona probabilità stai perdendo in questo formato: rivedi la selezione dei giochi e i livelli.':"Non si può ancora dire se sei vincente o perdente: il tuo risultato reale potrebbe stare in qualunque punto dell'intervallo.";
+ return`<div class="card"><h2>Quanto sono affidabili questi numeri?</h2><div class="alert ${sample[0]}" style="margin-bottom:8px">${sample[1]}</div>${size>=2?`<div class="row"><span>${metric} reale (intervallo 95%)</span><b>${loT} → ${hiT}</b></div>`:''}<div class="hint">${v}</div></div>`;
+}
+function breakdown(L,kind,keyFn,title){
+ const g={};L.forEach(s=>{const k=keyFn(s);(g[k]=g[k]||[]).push(s)});const keys=Object.keys(g);if(keys.length<2)return'';
+ const rows=keys.map(k=>{const a=g[k];if(kind==='mtt'){const m=mttStats(a);return{k,n:m.n,v1:money(m.P,1),c:m.P,v2:pc(m.roi)}}const c=cashStats(a);return{k,n:c.n,v1:money(c.G,1),c:c.G,v2:c.H>0?money(c.w):'—'}}).sort((a,b)=>b.c-a.c);
+ return`<div class="card"><h2>${title}</h2><table><tr><th></th><th>N.</th><th>Risultato</th><th>${kind==='mtt'?'ROI':'all\'ora'}</th></tr>${rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${r.n}</td><td class="${cl(r.c)}">${r.v1}</td><td>${r.v2}</td></tr>`).join('')}</table>${rows.some(r=>r.n<20)?'<div class="hint">Le righe con pochi eventi non sono significative.</div>':''}</div>`;
+}
+
+/* ---------- Roll ---------- */
+function txSigned(t){const a=num(t.amount);return{deposit:a,withdraw:-a,transfer:0,bonus:a,rakeback:a,expense:t.fromRoll===false?0:-a,adjust:a}[t.type]??0}
+function vRoll(R){
+ let h=`<div class="card"><h2>Conti</h2>${S.accounts.filter(a=>!a.archived||Math.abs(R.acc[a.id]||0)>0.004).map(a=>`<div class="row"><div>${esc(a.name)}<div class="sm mut">${a.type==='online'?'Online':'Live'}</div></div><b class="${(R.acc[a.id]||0)<0?'neg':''}">${money(R.acc[a.id]||0)}</b></div>`).join('')}<div class="row"><b>Totale</b><b>${money(R.roll)}</b></div>
+ <div class="btns" style="margin-top:10px"><button class="btn" data-act="newTx">+ Movimento</button><button class="btn sec" data-act="accounts">Gestisci conti</button></div></div>`;
+ h+=`<div class="card"><h2>Riepilogo</h2><div class="grid2">${kpi('Depositi',money(R.dep))}${kpi('Prelievi',money(R.wd))}${kpi('Risultato di gioco',money(R.game,1),cl(R.game))}${kpi('Bonus e rakeback',money(R.promo))}</div></div>`;
+ const L=desc(S.tx);
+ h+=`<div class="card" style="padding:4px 14px"><div class="month" style="margin:12px 0 4px"><span>Movimenti</span></div>${L.length?L.map(t=>{const a=acc(t.accountId),to=acc(t.toId),v=txSigned(t);
+  const sub=[fdate(t.date),t.type==='transfer'?`${a?.name||'?'} → ${to?.name||'?'}`:a?.name,t.cat,t.note].filter(Boolean).map(esc).join(' · ');
+  return`<div class="item" data-act="editTx" data-id="${t.id}"><div><div class="t">${TXT[t.type]||t.type}</div><div class="sm mut">${sub}</div>${t.type==='expense'&&t.fromRoll===false?'<span class="badge">fuori dal roll</span>':''}</div><div class="r"><b class="${cl(v)}">${t.type==='transfer'||v===0?money(num(t.amount)):money(v,1)}</b></div></div>`}).join(''):'<div class="empty">Nessun movimento.</div>'}</div>`;
+ return h;
+}
+function txForm(t){
+ const isNew=!t.id;t={date:today(),accountId:S.accounts.find(a=>!a.archived)?.id,fromRoll:true,...t};
+ const accO=sel=>S.accounts.filter(a=>!a.archived||a.id===sel).map(a=>opt(a.id,a.name,sel)).join('');
+ return`<h3>${isNew?'Nuovo movimento':'Modifica movimento'}</h3><form id="mform" data-id="${t.id||''}" onsubmit="return false" oninput="txToggle()">
+<label>Tipo</label><select name="type">${Object.entries(TXT).map(([k,l])=>opt(k,l,t.type)).join('')}</select>
+<div class="f2"><div><label>Data</label><input type="date" name="date" value="${esc(t.date)}"></div><div><label id="accLbl">Conto</label><select name="accountId">${accO(t.accountId)}</select></div></div>
+<div class="only-transfer"><label>Verso il conto</label><select name="toId">${accO(t.toId||S.accounts.find(a=>a.id!==t.accountId)?.id)}</select></div>
+<label id="amtLbl">Importo</label>${inp('amount',t.amount,'0,00')}
+<div class="only-expense"><div class="f2"><div><label>Categoria</label><select name="cat">${EXPCAT.map(c=>opt(c,c,t.cat)).join('')}</select></div><div><label>Trasferta</label><select name="tripId"><option value="">Nessuna</option>${S.trips.map(x=>opt(x.id,x.name,t.tripId)).join('')}</select></div></div>
+<label class="chk"><input type="checkbox" name="fromRoll" ${t.fromRoll!==false?'checked':''}>Pagata con i soldi del roll</label></div>
+<label>Nota</label>${inp('note',t.note,'','text')}
+<div class="hint" id="txHint"></div>
+<div class="btns" style="margin-top:14px"><button class="btn" data-act="saveTx">Salva</button><button type="button" class="btn sec" data-act="close">Annulla</button></div>
+${isNew?'':`<button type="button" class="btn dan full" style="margin-top:10px" data-act="delTx" data-id="${t.id}">Elimina movimento</button>`}</form>`;
+}
+function txToggle(){
+ const f=$('#mform'),ty=f.elements.type.value;
+ f.querySelectorAll('.only-transfer').forEach(e=>e.style.display=ty==='transfer'?'':'none');
+ f.querySelectorAll('.only-expense').forEach(e=>e.style.display=ty==='expense'?'':'none');
+ $('#accLbl').textContent=ty==='transfer'?'Dal conto':'Conto';
+ $('#amtLbl').textContent=ty==='adjust'?'Importo (con il segno meno per togliere)':'Importo';
+ $('#txHint').textContent=HINT[ty]||'';
+}
+function saveTx(){
+ const f=$('#mform'),o=Object.fromEntries(new FormData(f)),id=f.dataset.id,a=num(o.amount);
+ if(!o.date)return alert('Inserisci la data.');
+ if(!o.accountId)return alert('Crea prima un conto.');
+ if(o.type==='adjust'?a===0:!(a>0))return alert('Inserisci un importo valido.');
+ if(o.type==='transfer'&&o.toId===o.accountId)return alert('Scegli due conti diversi.');
+ const old=S.tx.find(x=>x.id===id);
+ const t={id:id||uid(),ts:old&&old.ts||Date.now(),type:o.type,date:o.date,accountId:o.accountId,amount:a,note:(o.note||'').trim()};
+ if(o.type==='transfer')t.toId=o.toId;
+ if(o.type==='expense'){t.cat=o.cat;t.tripId=o.tripId||'';t.fromRoll=!!o.fromRoll}
+ if(old)S.tx[S.tx.indexOf(old)]=t;else S.tx.push(t);
+ save();closeModal();render();
+}
+function delTx(d){if(!confirm('Eliminare questo movimento?'))return;S.tx=S.tx.filter(t=>t.id!==d.id);save();closeModal();render()}
+function accList(){
+ return`<h3>Conti</h3><div class="hint">Un conto per i contanti del live e uno per ogni sito online. Per spostare soldi tra conti usa "Trasferimento".</div><div class="card" style="margin-top:10px;padding:4px 14px">${S.accounts.map(a=>`<div class="item" data-act="editAcc" data-id="${a.id}"><div><div class="t">${esc(a.name)}${a.archived?' <span class="badge">archiviato</span>':''}</div><div class="sm mut">${a.type==='online'?'Online':'Live'}</div></div><div class="r">${money(_R.acc[a.id]||0)}</div></div>`).join('')}</div><div class="btns"><button class="btn" data-act="newAcc">+ Aggiungi conto</button><button class="btn sec" data-act="close">Chiudi</button></div>`;
+}
+function accForm(a){
+ const isNew=!a;a=a||{name:'',type:'online'};
+ return`<h3>${isNew?'Nuovo conto':'Modifica conto'}</h3><form id="mform" data-id="${a.id||''}" onsubmit="return false">
+<label>Nome</label>${inp('name',a.name,'es. PokerStars','text')}
+<label>Tipo</label><select name="type">${opt('live','Live (contanti)',a.type)}${opt('online','Online (sito)',a.type)}</select>
+${isNew?'':`<label class="chk"><input type="checkbox" name="archived" ${a.archived?'checked':''}>Archiviato (non compare nei nuovi inserimenti)</label>`}
+<div class="btns" style="margin-top:14px"><button class="btn" data-act="saveAcc">Salva</button><button type="button" class="btn sec" data-act="accounts">Indietro</button></div>
+${isNew?'':`<button type="button" class="btn dan full" style="margin-top:10px" data-act="delAcc" data-id="${a.id}">Elimina conto</button>`}</form>`;
+}
+function saveAcc(){
+ const f=$('#mform'),o=Object.fromEntries(new FormData(f)),id=f.dataset.id,name=(o.name||'').trim();
+ if(!name)return alert('Inserisci un nome.');
+ const old=S.accounts.find(a=>a.id===id);
+ if(old)Object.assign(old,{name,type:o.type,archived:!!o.archived});else S.accounts.push({id:uid(),name,type:o.type,archived:false});
+ save();render();openModal(accList());
+}
+function delAcc(d){
+ const used=S.sessions.some(s=>s.accountId===d.id)||S.tx.some(t=>t.accountId===d.id||t.toId===d.id);
+ if(used)return alert('Questo conto ha sessioni o movimenti: archivialo invece di eliminarlo.');
+ if(S.accounts.length<=1)return alert('Serve almeno un conto.');
+ if(!confirm('Eliminare il conto?'))return;
+ S.accounts=S.accounts.filter(a=>a.id!==d.id);save();render();openModal(accList());
+}
+
+/* ---------- Altro ---------- */
+function vMore(R){
+ if(UI.sub)return`<button class="btn sec sm back" data-act="back">← Altro</button>`+({staking:vStaking,trips:vTrips,risk:vRisk,backup:vBackup,settings:vSettings}[UI.sub]||(()=>''))(R);
+ const it=(k,i,t,d)=>`<div class="item" data-act="sub" data-k="${k}"><div><div class="t">${i}&nbsp; ${t}</div><div class="sm mut">${d}</div></div><div class="mut">›</div></div>`;
+ return`<div class="card" style="padding:4px 14px">${it('staking','♣','Staking','Accordi con i backer, makeup ed estratti conto')}${it('trips','✈','Trasferte','Costi e risultati di ogni viaggio di gioco')}${it('risk','⚖','Profilo di rischio','Quanti buy-in tenere, stop-loss, quando scendere di livello')}${it('backup','⤓','Backup e dati','Esporta, importa, sposta i dati su un altro telefono')}${it('settings','⚙','Impostazioni','Nome e valuta')}</div>
+ <div class="card"><h2>Assistente AI</h2><div class="mut">In arrivo: un assistente che analizza i tuoi dati e discute con te di gestione del bankroll, usando la tua chiave Gemini gratuita.</div></div>
+ <div class="hint" style="text-align:center">PokerRoll · i dati restano solo su questo dispositivo</div>`;
+}
+function vStaking(R){
+ let h=`<div class="card"><h2>Come funziona</h2><div class="sm"><b>Backing:</b> il backer paga i buy-in e l'utile si divide secondo la percentuale concordata. Con il <b>makeup</b>, le perdite si accumulano e vanno recuperate prima di dividere nuove vincite.<br><b>Vendita quote:</b> vendi una percentuale del torneo (anche con markup); paghi tu il buy-in e il backer ti rimborsa la sua parte.</div></div>`;
+ if(!S.deals.length)h+=`<div class="empty">Nessun accordo di staking.</div>`;
+ h+=S.deals.map(d=>{const D=R.deals[d.id];return`<div class="card"><h2>${esc(d.backer)}${d.active===false?' · non attivo':''}</h2><div class="sm mut" style="margin-bottom:8px">${esc(dealDesc(d))}</div><div class="grid2">${kpi('Sessioni',D.n)}${kpi('Investito dal backer',money(D.invested))}${kpi('Risultato backer',money(D.backer,1),cl(D.backer))}${kpi('Tua quota',money(D.player,1),cl(D.player))}${d.type==='split'&&d.makeup?kpi('Makeup attuale',money(D.makeup),D.makeup>0?'neg':''):''}</div><div class="btns" style="margin-top:10px"><button class="btn sec sm" data-act="stmt" data-id="${d.id}">Estratto conto</button><button class="btn sec sm" data-act="editDeal" data-id="${d.id}">Modifica</button></div></div>`}).join('');
+ return h+`<button class="btn full" data-act="newDeal">+ Nuovo accordo</button>`;
+}
+function dealForm(d){
+ const isNew=!d;d=d||{backer:'',type:'split',playerShare:50,makeup:false,pct:100,markup:1,active:true,notes:''};
+ return`<h3>${isNew?'Nuovo accordo':'Modifica accordo'}</h3><form id="mform" data-id="${d.id||''}" onsubmit="return false" oninput="dealToggle()">
+<label>Nome del backer</label>${inp('backer',d.backer,'es. Marco','text')}
+<label>Tipo di accordo</label><select name="type">${opt('split','Backing: il backer paga i buy-in, utile diviso',d.type)}${opt('quote','Vendita quote: vendi una % del torneo',d.type)}</select>
+<div class="only-split"><label>Percentuale dell'utile al giocatore</label>${inp('playerShare',d.playerShare,'50')}
+<label class="chk"><input type="checkbox" name="makeup" ${d.makeup?'checked':''}>Con makeup (le perdite vanno recuperate prima di dividere)</label></div>
+<div class="only-quote"><div class="f2"><div><label>% venduta (predefinita)</label>${inp('pct',d.pct,'50')}</div><div><label>Markup</label>${inp('markup',d.markup,'1,00')}</div></div><div class="hint">Markup 1,00 = quote vendute a prezzo pieno; 1,10 = +10% sul prezzo.</div></div>
+<label class="chk"><input type="checkbox" name="active" ${d.active!==false?'checked':''}>Accordo attivo</label>
+<label>Note (spese, durata, condizioni…)</label><textarea name="notes">${esc(d.notes)}</textarea>
+<div class="hint">Se modifichi le condizioni, tutti i calcoli passati vengono rifatti con le nuove regole.</div>
+<div class="btns" style="margin-top:14px"><button class="btn" data-act="saveDeal">Salva</button><button type="button" class="btn sec" data-act="close">Annulla</button></div>
+${isNew?'':`<button type="button" class="btn dan full" style="margin-top:10px" data-act="delDeal" data-id="${d.id}">Elimina accordo</button>`}</form>`;
+}
+function dealToggle(){const f=$('#mform'),t=f.elements.type.value;f.querySelectorAll('.only-split').forEach(e=>e.style.display=t==='split'?'':'none');f.querySelectorAll('.only-quote').forEach(e=>e.style.display=t==='quote'?'':'none')}
+function saveDeal(){
+ const f=$('#mform'),o=Object.fromEntries(new FormData(f)),id=f.dataset.id,backer=(o.backer||'').trim();
+ if(!backer)return alert('Inserisci il nome del backer.');
+ const d={id:id||uid(),backer,type:o.type,playerShare:Math.min(100,Math.max(0,num(o.playerShare))),makeup:!!o.makeup,pct:Math.min(100,Math.max(0,num(o.pct))),markup:num(o.markup)||1,active:!!o.active,notes:o.notes||''};
+ const i=S.deals.findIndex(x=>x.id===id);if(i>=0)S.deals[i]=d;else S.deals.push(d);
+ save();closeModal();render();
+}
+function delDeal(d){if(S.sessions.some(s=>s.stake&&s.stake.dealId===d.id))return alert('Ci sono sessioni collegate: disattiva l\'accordo invece di eliminarlo.');if(!confirm('Eliminare l\'accordo?'))return;S.deals=S.deals.filter(x=>x.id!==d.id);save();closeModal();render()}
+function stmtView(id){
+ const d=S.deals.find(x=>x.id===id),D=_R.deals[id],rows=asc(S.sessions.filter(s=>s.stake&&s.stake.dealId===id));
+ let t=`ESTRATTO CONTO STAKING\nBacker: ${d.backer}\nGiocatore: ${S.settings.name||'-'}\nAccordo: ${dealDesc(d)}\nAggiornato al ${fdate(today())}\n\n`;
+ rows.forEach(s=>{const x=_R.sess[s.id];t+=`${fdate(s.date)} · ${sessLabel(s)}${s.venue?' ('+s.venue+')':''}\n  costo ${money(cost(s))} · incasso ${money(ret(s))} · quota backer ${money(x.backer,1)}\n`});
+ t+=`\nSessioni: ${D.n}\nInvestito dal backer: ${money(D.invested)}\nRisultato backer: ${money(D.backer,1)}\nRisultato giocatore: ${money(D.player,1)}`;
+ if(d.type==='split'&&d.makeup)t+=`\nMakeup attuale: ${money(D.makeup)}`;
+ return`<h3>Estratto conto · ${esc(d.backer)}</h3><pre id="stmtText">${esc(t)}</pre><div class="btns"><button class="btn" data-act="share">Condividi</button><button class="btn sec" data-act="copy">Copia</button><button class="btn sec" data-act="close">Chiudi</button></div>`;
+}
+function tripStats(id,R){
+ const ss=S.sessions.filter(s=>s.tripId===id),ex=S.tx.filter(t=>t.type==='expense'&&t.tripId===id);
+ const player=ss.reduce((a,s)=>a+(R.sess[s.id]?.player||0),0),exp=ex.reduce((a,t)=>a+num(t.amount),0),byCat={};
+ ex.forEach(t=>{const c=t.cat||'Altro';byCat[c]=(byCat[c]||0)+num(t.amount)});
+ return{n:ss.length,player,exp,byCat,net:player-exp,hours:ss.reduce((a,s)=>a+num(s.hours),0)};
+}
+function vTrips(R){
+ let h=`<div class="hint" style="margin-bottom:10px">Collega a una trasferta sia le sessioni sia le spese (viaggio, alloggio, vitto). Così vedi se il viaggio è stato davvero in attivo.</div>`;
+ const L=[...S.trips].sort((a,b)=>(b.from||'').localeCompare(a.from||''));
+ if(!L.length)h+=`<div class="empty">Nessuna trasferta.</div>`;
+ h+=L.map(t=>{const x=tripStats(t.id,R);return`<div class="card"><h2>${esc(t.name)}</h2><div class="sm mut" style="margin-bottom:8px">${fdate(t.from)}${t.to&&t.to!==t.from?' → '+fdate(t.to):''}${t.notes?' · '+esc(t.notes):''}</div><div class="grid2">${kpi('Sessioni',x.n)}${kpi('Tua quota di gioco',money(x.player,1),cl(x.player))}${kpi('Spese',money(x.exp))}${kpi('Netto trasferta',money(x.net,1),cl(x.net))}</div>${Object.keys(x.byCat).length?`<div class="sm mut" style="margin-top:8px">${Object.entries(x.byCat).map(([c,v])=>`${esc(c)} ${money(v)}`).join(' · ')}</div>`:''}<div class="btns" style="margin-top:10px"><button class="btn sec sm" data-act="newTx" data-type="expense" data-trip="${t.id}">+ Spesa</button><button class="btn sec sm" data-act="editTrip" data-id="${t.id}">Modifica</button></div></div>`}).join('');
+ return h+`<button class="btn full" data-act="newTrip">+ Nuova trasferta</button>`;
+}
+function tripForm(t){
+ const isNew=!t;t=t||{name:'',from:today(),to:today(),notes:''};
+ return`<h3>${isNew?'Nuova trasferta':'Modifica trasferta'}</h3><form id="mform" data-id="${t.id||''}" onsubmit="return false">
+<label>Nome</label>${inp('name',t.name,'es. Bratislava novembre','text')}
+<div class="f2"><div><label>Dal</label><input type="date" name="from" value="${esc(t.from)}"></div><div><label>Al</label><input type="date" name="to" value="${esc(t.to)}"></div></div>
+<label>Note</label><textarea name="notes">${esc(t.notes)}</textarea>
+<div class="btns" style="margin-top:14px"><button class="btn" data-act="saveTrip">Salva</button><button type="button" class="btn sec" data-act="close">Annulla</button></div>
+${isNew?'':`<button type="button" class="btn dan full" style="margin-top:10px" data-act="delTrip" data-id="${t.id}">Elimina trasferta</button>`}</form>`;
+}
+function saveTrip(){
+ const f=$('#mform'),o=Object.fromEntries(new FormData(f)),id=f.dataset.id,name=(o.name||'').trim();
+ if(!name)return alert('Inserisci un nome.');
+ const t={id:id||uid(),name,from:o.from,to:o.to||o.from,notes:o.notes||''};
+ const i=S.trips.findIndex(x=>x.id===id);if(i>=0)S.trips[i]=t;else S.trips.push(t);
+ save();closeModal();render();
+}
+function delTrip(d){if(!confirm('Eliminare la trasferta? Sessioni e spese restano, ma non saranno più collegate.'))return;S.trips=S.trips.filter(t=>t.id!==d.id);S.sessions.forEach(s=>{if(s.tripId===d.id)s.tripId=''});S.tx.forEach(t=>{if(t.tripId===d.id)t.tripId=''});save();closeModal();render()}
+
+function vRisk(R){
+ const p=curProfile(),hist=[...S.risk].sort((a,b)=>b.from.localeCompare(a.from));
+ const bad=asc(S.sessions).filter(s=>R.sess[s.id]?.risk?.ok===false);
+ const row=(l,v)=>`<div class="row"><span>${l}</span><b>${v}</b></div>`;
+ let h=`<div class="card"><h2>Profilo attivo · ${esc(p.name)}</h2>${Object.entries(FORMATS).map(([k,l])=>row(l,num(p[k])+' buy-in')).join('')}${row('Valuta di scendere di livello dopo un calo del',n1(num(p.moveDownPct))+'%')}${row('Stop-loss giornaliero',num(p.stopLoss)>0?money(num(p.stopLoss)):'non attivo')}</div>`;
+ h+=`<div class="card"><h2>Rispetto delle regole</h2>${bad.length?`<div style="margin-bottom:6px">${bad.length} ${bad.length===1?'sessione giocata':'sessioni giocate'} sopra il limite del profilo in vigore in quel momento.</div>`+bad.slice(-5).reverse().map(s=>`<div class="item" data-act="editSess" data-id="${s.id}"><div>${fdate(s.date)} · ${esc(sessLabel(s))}<div class="sm mut">roll richiesto ${money(R.sess[s.id].risk.req)}, disponibile ${money(R.sess[s.id].rollBefore)}</div></div></div>`).join(''):'<div class="pos">Tutte le sessioni rispettano il profilo in vigore al momento in cui sono state giocate.</div>'}<div class="hint">Le sessioni in backing (il backer paga i buy-in) non pesano sul tuo roll e non vengono controllate.</div></div>`;
+ h+=`<div class="card"><h2>Nuova versione del profilo</h2><div class="chips">${Object.keys(PRESETS).map(k=>`<button class="chip" data-act="preset" data-k="${k}">${k}</button>`).join('')}</div>
+ <form id="rform" onsubmit="return false"><div class="f2"><div><label>Nome</label>${inp('name',p.name,'','text')}</div><div><label>Valido dal</label><input type="date" name="from" value="${today()}"></div></div>
+ <div class="f2">${Object.entries(FORMATS).map(([k,l])=>`<div><label>${l} (buy-in)</label>${inp(k,p[k],'','numeric')}</div>`).join('')}<div><label>Calo per scendere (%)</label>${inp('moveDownPct',p.moveDownPct,'25')}</div></div>
+ <label>Stop-loss giornaliero (0 = disattivato)</label>${inp('stopLoss',p.stopLoss,'0')}
+ <div class="hint">I numeri predefiniti sono indicativi: le guide non concordano (per il cash live si va da 20 a 50 buy-in, per i tornei da 50 a 200). Più il tuo vantaggio è piccolo o incerto, più buy-in servono. Ogni modifica crea una nuova versione: le sessioni passate restano giudicate con le regole di allora.</div>
+ <button class="btn full" style="margin-top:12px" data-act="saveRisk">Salva profilo</button></form></div>`;
+ h+=`<div class="card"><h2>Storico profili</h2>${hist.map(x=>`<div class="row"><div>${x.from<='2000-01-01'?'Iniziale':'Dal '+fdate(x.from)} · <b>${esc(x.name)}</b><div class="sm mut">Cash live ${num(x.cash_live)} · Tornei live ${num(x.mtt_live)} · Tornei online ${num(x.mtt_online)} · Stop-loss ${num(x.stopLoss)>0?money(num(x.stopLoss)):'no'}</div></div>${hist.length>1?`<button class="btn dan sm" data-act="delRisk" data-id="${x.id}">✕</button>`:''}</div>`).join('')}</div>`;
+ return h;
+}
+function saveRisk(){
+ const f=$('#rform'),o=Object.fromEntries(new FormData(f));
+ if(!o.from)return alert('Indica da quando vale il profilo.');
+ const p={id:uid(),from:o.from,name:(o.name||'').trim()||'Personalizzato',moveDownPct:num(o.moveDownPct),stopLoss:Math.max(0,num(o.stopLoss))};
+ for(const k of Object.keys(FORMATS)){p[k]=num(o[k]);if(!(p[k]>0))return alert('Inserisci un numero di buy-in valido per '+FORMATS[k]+'.')}
+ const i=S.risk.findIndex(x=>x.from===p.from);if(i>=0)S.risk[i]=p;else S.risk.push(p);
+ save();render();alert('Profilo salvato.');
+}
+function delRisk(d){if(S.risk.length<=1)return;if(!confirm('Eliminare questa versione del profilo?'))return;S.risk=S.risk.filter(x=>x.id!==d.id);if(!S.risk.some(x=>x.from<='2000-01-01')){const first=[...S.risk].sort((a,b)=>a.from.localeCompare(b.from))[0];first.from='2000-01-01'}save();render()}
+
+function vBackup(){
+ const lb=S.settings.lastBackup;
+ return`<div class="card"><h2>Backup</h2><div class="sm" style="margin-bottom:10px">I dati sono salvati solo su questo dispositivo. Se cambi o perdi il telefono, li recuperi solo con un backup. ${lb?'Ultimo backup: <b>'+fdate(lb)+'</b>.':'<b>Non hai ancora fatto un backup.</b>'}</div><button class="btn full" data-act="exportData">Esporta backup</button><div class="hint">Salva il file su Google Drive o mandalo a te stesso via email.</div></div>
+ <div class="card"><h2>Ripristino</h2><div class="sm" style="margin-bottom:10px">Carica un file di backup. <b>Sostituisce tutti i dati attuali.</b></div><button class="btn sec full" data-act="importData">Importa backup</button></div>
+ <div class="card"><h2>Dati presenti</h2><div class="row"><span>Sessioni</span><b>${S.sessions.length}</b></div><div class="row"><span>Movimenti</span><b>${S.tx.length}</b></div><div class="row"><span>Accordi di staking</span><b>${S.deals.length}</b></div><div class="row"><span>Trasferte</span><b>${S.trips.length}</b></div></div>
+ <button class="btn dan full" data-act="wipe">Cancella tutti i dati</button>`;
+}
+function exportData(){
+ const name=`pokerroll-backup-${today()}.json`,data=JSON.stringify(S,null,1),blob=new Blob([data],{type:'application/json'});
+ const done=()=>{S.settings.lastBackup=today();save();render()};
+ try{const file=new File([blob],name,{type:'application/json'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],title:'Backup PokerRoll'}).then(done).catch(()=>{});return}}catch(e){}
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);done();
+}
+function doImport(el){
+ const file=el.files[0];if(!file)return;const rd=new FileReader();
+ rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!d||!Array.isArray(d.sessions)||!Array.isArray(d.accounts))throw new Error('formato non valido');
+  if(!confirm(`Il backup contiene ${d.sessions.length} sessioni e ${(d.tx||[]).length} movimenti. Sostituire i dati attuali?`))return;
+  const def=defState();S={...def,...d,settings:{...def.settings,...d.settings}};save();UI.sub=null;UI.tab='home';render();alert('Backup ripristinato.')}
+  catch(e){alert('File non valido: '+e.message)}finally{el.value=''}};
+ rd.readAsText(file);
+}
+function wipe(){if(!confirm('Cancellare TUTTI i dati? Operazione irreversibile.'))return;if(!confirm('Sei sicuro? Ti consiglio di esportare prima un backup.'))return;S=defState();save();UI.sub=null;UI.tab='home';render()}
+function vSettings(){
+ return`<div class="card"><h2>Impostazioni</h2><form id="sform" onsubmit="return false"><label>Il tuo nome (compare negli estratti conto)</label>${inp('name',S.settings.name,'','text')}
+ <label>Valuta</label><select name="currency">${[['EUR','Euro (€)'],['USD','Dollaro ($)'],['GBP','Sterlina (£)'],['CHF','Franco svizzero']].map(([k,l])=>opt(k,l,S.settings.currency)).join('')}</select>
+ <div class="hint">Per ora l'app usa una sola valuta: registra gli importi esteri già convertiti.</div>
+ <button class="btn full" style="margin-top:12px" data-act="saveSet">Salva</button></form></div>`;
+}
+
+/* =================== Modale e azioni =================== */
+function openModal(html){$('#sheet').innerHTML=html;$('#modal').classList.add('open');$('#sheet').scrollTop=0;const f=$('#mform');if(f&&f.getAttribute('oninput'))f.dispatchEvent(new Event('input'))}
+function closeModal(){$('#modal').classList.remove('open');$('#sheet').innerHTML='';UI.fromLive=false}
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+const ACT={
+ tab:d=>{UI.tab=d.k;UI.sub=null;render();scrollTo(0,0)},
+ sub:d=>{UI.tab='more';UI.sub=d.k;render();scrollTo(0,0)},
+ back:()=>{UI.sub=null;render()},
+ close:closeModal,
+ newSess:()=>openModal(sessForm(null)),
+ editSess:d=>openModal(sessForm(S.sessions.find(s=>s.id===d.id))),
+ kind:d=>{const f=$('#mform');f.dataset.kind=d.k;f.elements.kind.value=d.k;f.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.k===d.k));sessPreview()},
+ saveSess,delSess,
+ sf:d=>{UI.sesFilter=d.k;render()},
+ startLive:()=>{S.live={start:Date.now()};save();render()},
+ endLive:()=>{const h=Math.max(0.25,Math.round((Date.now()-S.live.start)/9e5)/4);openModal(sessForm({date:today(),hours:h}));UI.fromLive=true},
+ cancelLive:()=>{if(confirm('Annullare il cronometro?')){S.live=null;save();render()}},
+ check:checkPlay,
+ newTx:d=>openModal(txForm({type:d.type||'deposit',tripId:d.trip||''})),
+ editTx:d=>openModal(txForm(S.tx.find(t=>t.id===d.id))),
+ saveTx,delTx,
+ accounts:()=>openModal(accList()),
+ newAcc:()=>openModal(accForm(null)),
+ editAcc:d=>openModal(accForm(S.accounts.find(a=>a.id===d.id))),
+ saveAcc,delAcc,
+ newDeal:()=>openModal(dealForm(null)),
+ editDeal:d=>openModal(dealForm(S.deals.find(x=>x.id===d.id))),
+ saveDeal,delDeal,
+ stmt:d=>openModal(stmtView(d.id)),
+ share:()=>{const t=$('#stmtText').textContent;if(navigator.share)navigator.share({text:t}).catch(()=>{});else ACT.copy()},
+ copy:()=>{const t=$('#stmtText').textContent;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>alert('Copiato.'),()=>alert('Copia non disponibile: seleziona il testo e copialo a mano.'))},
+ newTrip:()=>openModal(tripForm(null)),
+ editTrip:d=>openModal(tripForm(S.trips.find(t=>t.id===d.id))),
+ saveTrip,delTrip,
+ preset:d=>{const f=$('#rform'),p=PRESETS[d.k];Object.entries(p).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v});f.elements.name.value=d.k},
+ saveRisk,delRisk,
+ exportData,importData:()=>$('#impFile').click(),wipe,
+ saveSet:()=>{const o=Object.fromEntries(new FormData($('#sform')));S.settings.name=(o.name||'').trim();S.settings.currency=o.currency;save();render();alert('Salvato.')},
+ st:d=>{UI.stat[d.g]=d.k;render()},
+};
+document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const fn=ACT[el.dataset.act];if(!fn)return;e.preventDefault();fn(el.dataset,el)});
+setInterval(()=>{const t=$('#timer');if(t&&S.live)t.textContent=elapsed()},1000);
+
+render();
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
