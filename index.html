@@ -91,6 +91,21 @@ svg.chart{width:100%;height:150px;display:block}
 .hint{font-size:12.5px;color:var(--mut);margin-top:6px}
 pre{white-space:pre-wrap;font-size:12.5px;background:var(--card);padding:12px;border-radius:10px;border:1px solid var(--line);font-family:ui-monospace,Menlo,monospace}
 .back{margin-bottom:12px}
+.msg{padding:10px 12px;border-radius:12px;margin:8px 0;font-size:14.5px;line-height:1.5;word-wrap:break-word}
+.msg.user{background:var(--acc2);margin-left:14%}
+.msg.model{background:var(--card2);margin-right:4%}
+.msg.err{background:#3a1a1a;border:1px solid #6b2a2a}
+button[disabled],textarea[disabled]{opacity:.5}
+a{color:var(--gold)}
+.qh{display:inline-block;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:var(--card2);color:var(--gold);font-weight:700;font-size:13px;line-height:20px;padding:0;margin-left:6px;vertical-align:middle;cursor:pointer;font-family:inherit;text-transform:none;letter-spacing:0}
+.card h2 .qh,h3 .qh{float:right;margin:-3px 0 0 8px}
+#helpm{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center}
+#helpm.open{display:flex}
+.guide{font-size:14.5px;line-height:1.55}
+details.card>summary{font-weight:600;cursor:pointer;list-style:none}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::after{content:'+';float:right;color:var(--mut);font-weight:700}
+details.card[open]>summary::after{content:'−'}
 </style>
 </head>
 <body>
@@ -98,6 +113,7 @@ pre{white-space:pre-wrap;font-size:12.5px;background:var(--card);padding:12px;bo
 <main id="app"></main>
 <nav id="nav"></nav>
 <div id="modal"><div class="sheet" id="sheet"></div></div>
+<div id="helpm"><div class="sheet" id="hsheet"></div></div>
 <input type="file" id="impFile" accept=".json,application/json" style="display:none" onchange="doImport(this)">
 <script>
 'use strict';
@@ -140,7 +156,7 @@ const HINT={deposit:'Soldi aggiunti al roll dai tuoi fondi personali. Non contan
 /* =================== Stato =================== */
 function defState(){return{v:1,settings:{currency:'EUR',name:'',lastBackup:''},
  accounts:[{id:'acc_live',name:'Contanti (live)',type:'live',archived:false}],
- tx:[],sessions:[],deals:[],trips:[],
+ tx:[],sessions:[],deals:[],trips:[],pools:[],
  risk:[{id:uid(),from:'2000-01-01',name:'Standard',...PRESETS.Standard,stopLoss:0}],live:null}}
 function load(){try{const r=JSON.parse(localStorage.getItem(KEY));if(r&&r.v){const d=defState();return{...d,...r,settings:{...d.settings,...r.settings}}}}catch(e){}return defState()}
 let S=load();
@@ -188,20 +204,26 @@ function riskCheck(s,rollBefore,r){
  const req=num(p[fk])*unit;return{ok:rollBefore+1e-9>=req,req,p,fk};
 }
 function compute(){
- const R={sess:{},deals:{},acc:{},roll:0,tl:[],game:0,promo:0,exp:0,dep:0,wd:0,cum:0,peak:0,dd:0,ddPct:0,todayNet:0,month:0};
+ const R={sess:{},deals:{},acc:{},pools:{},roll:0,tl:[],game:0,promo:0,exp:0,dep:0,wd:0,poolAdj:0,cum:0,peak:0,dd:0,ddPct:0,todayNet:0,month:0};
  S.deals.forEach(d=>R.deals[d.id]={makeup:0,invested:0,ret:0,player:0,backer:0,n:0});
  S.accounts.forEach(a=>R.acc[a.id]=0);
  const add=(id,v)=>{R.acc[id]=(R.acc[id]||0)+v};
+ const SR={};asc(S.sessions).forEach(s=>SR[s.id]=stakeCalc(s,R));
+ (S.pools||[]).forEach(p=>R.pools[p.id]=poolCalc(p,SR));
  const ev=[];
  S.sessions.forEach(s=>ev.push({d:s.date||'',ts:s.ts||0,s}));
  S.tx.forEach(t=>ev.push({d:t.date||'',ts:t.ts||0,t}));
+ (S.pools||[]).forEach(p=>ev.push({d:R.pools[p.id].date||'',ts:9e15,p}));
  ev.sort((a,b)=>a.d.localeCompare(b.d)||a.ts-b.ts);
  let roll=0,cum=0,peak=0;const td=today(),mo=td.slice(0,7);
  for(const e of ev){
-  if(e.s){const s=e.s,r=stakeCalc(s,R);
+  if(e.s){const s=e.s,r=SR[s.id];
    R.sess[s.id]={...r,rollBefore:roll,risk:riskCheck(s,roll,r)};
    roll+=r.player;cum+=r.player;R.game+=r.player;add(s.accountId,r.player);
    if(s.date===td)R.todayNet+=r.player;if((s.date||'').slice(0,7)===mo)R.month+=r.player;
+  }else if(e.p){const a=R.pools[e.p.id].myAdj;
+   roll+=a;cum+=a;R.game+=a;R.poolAdj+=a;add(e.p.accountId,a);
+   if(e.d===td)R.todayNet+=a;if(e.d.slice(0,7)===mo)R.month+=a;
   }else{const t=e.t,a=num(t.amount);
    switch(t.type){
     case'deposit':roll+=a;R.dep+=a;add(t.accountId,a);break;
@@ -251,15 +273,17 @@ const kpi=(l,v,c='')=>`<div class="kpi"><span>${l}</span><b class="${c}">${v}</b
 function elapsed(){if(!S.live)return'';const t=Math.floor((Date.now()-S.live.start)/1000);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
 function vHome(R){
  const p=curProfile();let h='';
- if(!S.sessions.length&&!S.tx.length)h+=`<div class="card"><h2>Benvenuto</h2><p style="margin-top:0">Per iniziare: <b>1)</b> registra il tuo roll di partenza con un deposito; <b>2)</b> controlla il tuo profilo di rischio in Altro; <b>3)</b> aggiungi i conti dei siti online in Roll, se giochi online.</p><div class="btns"><button class="btn" data-act="newTx" data-type="deposit">Registra roll iniziale</button></div></div>`;
+ if(!S.sessions.length&&!S.tx.length)h+=`<div class="card"><h2>Benvenuto</h2><p style="margin-top:0">Per iniziare: <b>1)</b> registra il tuo roll di partenza con un deposito; <b>2)</b> controlla il tuo profilo di rischio in Altro; <b>3)</b> aggiungi i conti dei siti online in Roll, se giochi online.</p><div class="btns"><button class="btn" data-act="newTx" data-type="deposit">Registra roll iniziale</button><button class="btn sec" data-act="sub" data-k="guide">Guida rapida</button></div></div>`;
  if(num(p.stopLoss)>0&&-R.todayNet>=num(p.stopLoss))h+=`<div class="alert r"><b>Stop-loss raggiunto.</b> Oggi hai perso ${money(-R.todayNet)} (limite ${money(num(p.stopLoss))}). La regola dice di fermarsi per oggi.</div>`;
  if(R.dd>0&&R.ddPct*100>=num(p.moveDownPct))h+=`<div class="alert y"><b>Downswing del ${pc(R.ddPct)}</b> dal tuo massimo (${money(R.dd)}). Il tuo profilo prevede di valutare un passo indietro di livello oltre il ${n1(num(p.moveDownPct))}%.</div>`;
  const lb=S.settings.lastBackup;if(S.sessions.length+S.tx.length>3&&(!lb||lb<daysAgo(14)))h+=`<div class="alert y">I dati sono solo su questo telefono. ${lb?'Ultimo backup il '+fdate(lb)+'.':'Non hai ancora fatto un backup.'} <a href="#" data-act="sub" data-k="backup" style="color:var(--gold)">Fai un backup</a></div>`;
+ const unp=(S.pools||[]).filter(q=>!q.settled&&R.pools[q.id]&&R.pools[q.id].tr.length);
+ if(unp.length)h+=`<div class="alert y">${unp.length===1?'Hai una cassa comune':'Hai '+unp.length+' casse comuni'} con conguagli da regolare. <a href="#" data-act="sub" data-k="pools">Vedi</a></div>`;
  const accs=S.accounts.filter(a=>!a.archived||Math.abs(R.acc[a.id]||0)>0.004);
- h+=`<div class="card"><h2>Bankroll</h2><div class="big ${R.roll<0?'neg':''}">${money(R.roll)}</div>${accs.length>1?accs.map(a=>`<div class="row sm"><span class="mut">${esc(a.name)}</span><span>${money(R.acc[a.id]||0)}</span></div>`).join(''):''}</div>`;
- h+=S.live?`<div class="card"><h2>Sessione live in corso</h2><div class="timer" id="timer">${elapsed()}</div><div class="btns" style="margin-top:10px"><button class="btn" data-act="endLive">Termina e registra</button><button class="btn sec" data-act="cancelLive">Annulla</button></div></div>`
+ h+=`<div class="card"><h2>${qh('conti')}Bankroll</h2><div class="big ${R.roll<0?'neg':''}">${money(R.roll)}</div>${accs.length>1?accs.map(a=>`<div class="row sm"><span class="mut">${esc(a.name)}</span><span>${money(R.acc[a.id]||0)}</span></div>`).join(''):''}</div>`;
+ h+=S.live?`<div class="card"><h2>${qh('live')}Sessione live in corso</h2><div class="timer" id="timer">${elapsed()}</div><div class="btns" style="margin-top:10px"><button class="btn" data-act="endLive">Termina e registra</button><button class="btn sec" data-act="cancelLive">Annulla</button></div></div>`
   :`<button class="btn sec full" style="margin-bottom:12px" data-act="startLive">▶ Avvia cronometro sessione</button>`;
- h+=`<div class="card"><h2>Risultati</h2><div class="grid2">${kpi('Risultato di gioco',money(R.game,1),cl(R.game))}${kpi('Questo mese',money(R.month,1),cl(R.month))}${kpi('Bonus e rakeback',money(R.promo))}${kpi('Spese registrate',money(R.exp))}</div><div class="hint">Il risultato di gioco è la tua quota personale, già al netto delle quote dei backer.</div></div>`;
+ h+=`<div class="card"><h2>Risultati</h2><div class="grid2">${kpi('Risultato di gioco',money(R.game,1),cl(R.game))}${kpi('Questo mese',money(R.month,1),cl(R.month))}${kpi('Bonus e rakeback',money(R.promo))}${kpi('Spese registrate',money(R.exp))}</div><div class="hint">Il risultato di gioco è la tua quota personale, già al netto delle quote dei backer e dei conguagli delle casse comuni.</div></div>`;
  h+=vCanPlay(R,p);
  if(R.tl.length>1)h+=`<div class="card"><h2>Andamento del roll</h2>${chart(R.tl.map(x=>x.roll))}</div>`;
  return h;
@@ -268,7 +292,7 @@ function vCanPlay(R,p){
  const rows=Object.entries(FORMATS).map(([k,l])=>{const bi=num(p[k]);const max=bi>0?Math.max(0,R.roll)/bi:0;
   const extra=k.startsWith('cash')?`<div class="sm mut">big blind fino a ${n1(max/100)}</div>`:'';
   return`<div class="row"><div>${l}<div class="sm mut">${bi} buy-in richiesti</div></div><div style="text-align:right"><b>${money(max)}</b>${extra}</div></div>`}).join('');
- return`<div class="card"><h2>Cosa puoi giocare · profilo ${esc(p.name)}</h2><div class="sm mut" style="margin-bottom:4px">Buy-in massimo per evento con il roll attuale</div>${rows}
+ return`<div class="card"><h2>${qh('rischio')}Cosa puoi giocare · profilo ${esc(p.name)}</h2><div class="sm mut" style="margin-bottom:4px">Buy-in massimo per evento con il roll attuale</div>${rows}
  <div style="margin-top:12px"><div class="f2"><div><label>Formato</label><select id="chkF">${Object.entries(FORMATS).map(([k,l])=>opt(k,l,'mtt_live')).join('')}</select></div><div><label id="chkL">Buy-in (€) o big blind</label><input id="chkV" inputmode="decimal" placeholder="es. 150"></div></div>
  <button class="btn sec full" style="margin-top:10px" data-act="check">Posso giocarlo?</button><div id="chkRes"></div></div></div>`;
 }
@@ -295,16 +319,16 @@ function chart(vals){
 function vSess(R){
  const f=UI.sesFilter;
  const chip=(k,l)=>`<button class="chip ${f===k?'on':''}" data-act="sf" data-k="${k}">${l}</button>`;
- let h=`<div class="chips">${chip('all','Tutte')}${chip('mtt','Tornei')}${chip('cash','Cash')}${chip('live','Live')}${chip('online','Online')}${chip('staked','Con staking')}</div>`;
+ let h=`<div class="row sm" style="padding:0 0 8px"><span class="mut">Tocca una sessione per modificarla</span><span>${qhl('torneo','Tornei')} · ${qhl('cash','Cash')}</span></div><div class="chips">${chip('all','Tutte')}${chip('mtt','Tornei')}${chip('cash','Cash')}${chip('live','Live')}${chip('online','Online')}${chip('staked','Con staking')}</div>`;
  const L=desc(S.sessions).filter(s=>f==='all'||s.kind===f||setting(s)===f||(f==='staked'&&R.sess[s.id]?.staked));
  if(!L.length)h+=`<div class="empty">Nessuna sessione.<br>Usa il tasto + per registrarne una.</div>`;
  const groups={};L.forEach(s=>{const k=(s.date||'').slice(0,7);(groups[k]=groups[k]||[]).push(s)});
  for(const k of Object.keys(groups)){
   const tot=groups[k].reduce((a,s)=>a+(R.sess[s.id]?.player||0),0);const [y,m]=k.split('-');
   h+=`<div class="month"><span>${MESI[+m-1]||''} ${y}</span><span class="${cl(tot)}">${money(tot,1)}</span></div><div class="card" style="padding:4px 14px">`;
-  h+=groups[k].map(s=>{const x=R.sess[s.id]||{};const tr=S.trips.find(t=>t.id===s.tripId);
+  h+=groups[k].map(s=>{const x=R.sess[s.id]||{};const tr=S.trips.find(t=>t.id===s.tripId),pl=(S.pools||[]).find(q=>q.id===s.poolId);
    const sub=[fdate(s.date),s.venue,s.kind==='mtt'&&num(s.entries)>1?num(s.entries)+' ingressi':'',s.kind==='mtt'&&num(s.position)?`${num(s.position)}°${num(s.field)?' su '+num(s.field):''}`:'',num(s.hours)?n1(num(s.hours))+' h':''].filter(Boolean).map(esc).join(' · ');
-   const b=[x.staked?`<span class="badge g">staking ${esc(x.deal.backer)}</span>`:'',x.risk&&x.risk.ok===false?'<span class="badge w">sopra il limite</span>':'',tr?`<span class="badge">${esc(tr.name)}</span>`:''].join('');
+   const b=[x.staked?`<span class="badge g">staking ${esc(x.deal.backer)}</span>`:'',x.risk&&x.risk.ok===false?'<span class="badge w">sopra il limite</span>':'',tr?`<span class="badge">${esc(tr.name)}</span>`:'',pl?`<span class="badge">cassa: ${esc(pl.name)}</span>`:''].join('');
    return`<div class="item" data-act="editSess" data-id="${s.id}"><div><div class="t">${esc(sessLabel(s))}</div><div class="sm mut">${sub}</div>${b}</div><div class="r"><b class="${cl(x.player)}">${money(x.player,1)}</b>${x.staked?`<div class="sm mut">al tavolo ${money(x.gross,1)}</div>`:''}</div></div>`}).join('');
   h+=`</div>`;
  }
@@ -324,11 +348,11 @@ function sessForm(s){
 <div class="f2"><div><label>Data</label><input type="date" name="date" value="${esc(s.date)}"></div><div><label>Conto</label><select name="accountId">${accO}</select></div></div>
 <label>Luogo / sito</label><input name="venue" list="venues" value="${esc(s.venue)}" placeholder="es. Casinò di Sanremo" autocomplete="off"><datalist id="venues">${venues.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
 <div class="f2"><div><label>Gioco</label><select name="game">${GAMES.map(g=>opt(g,g,s.game)).join('')}</select></div><div><label>Ore giocate</label>${inp('hours',s.hours,'es. 4,5')}</div></div>
-<fieldset class="only-cash"><legend>Cash game</legend>
+<fieldset class="only-cash"><legend>Cash game ${qh('cash')}</legend>
  <div class="f2"><div><label>Small blind</label>${inp('sb',s.sb,'1')}</div><div><label>Big blind</label>${inp('bb',s.bb,'2')}</div></div>
  <div class="f2"><div><label>Totale investito (buy-in + ricariche)</label>${inp('buyIn',s.buyIn,'0')}</div><div><label>Cash-out</label>${inp('cashOut',s.cashOut,'0')}</div></div>
 </fieldset>
-<fieldset class="only-mtt"><legend>Torneo</legend>
+<fieldset class="only-mtt"><legend>Torneo ${qh('torneo')}</legend>
  <label>Nome del torneo</label>${inp('name',s.name,'es. Main Event','text')}
  <div class="f2"><div><label>Tipo</label><select name="ttype">${TTYPES.map(t=>opt(t,t,s.ttype)).join('')}</select></div><div><label>Iscritti totali</label>${inp('field',s.field,'','numeric')}</div></div>
  <div class="f2"><div><label>Buy-in (quota montepremi)</label>${inp('tBuyIn',s.tBuyIn,'es. 135')}</div><div><label>Fee / rake</label>${inp('tFee',s.tFee,'es. 15')}</div></div>
@@ -336,10 +360,11 @@ function sessForm(s){
  <div class="hint">Ingressi = 1 + numero di re-entry.</div><div class="f2"><div><label>N. add-on</label>${inp('addons',s.addons,'0','numeric')}</div><div><label>Costo add-on</label>${inp('addonCost',s.addonCost,'0')}</div></div>
  <div class="f3"><div><label>Premio</label>${inp('prize',s.prize,'0')}</div><div><label>Bounty vinte</label>${inp('bounty',s.bounty,'0')}</div><div><label>Posizione</label>${inp('position',s.position,'','numeric')}</div></div>
 </fieldset>
-<fieldset><legend>Staking e trasferta</legend>
+<fieldset><legend>Staking, trasferta, cassa comune ${qh('staking')}</legend>
  <label>Accordo di staking</label><select name="dealId"><option value="">Nessuno (gioco con i miei soldi)</option>${deals.map(d=>opt(d.id,`${d.backer} – ${d.type==='quote'?'vendita quote':'backing'}`,st.dealId)).join('')}</select>
  <div id="pctWrap"><label>% di quote vendute in questa sessione (vuoto = predefinita)</label>${inp('pct',st.pct,'')}</div>
  <label>Trasferta</label><select name="tripId"><option value="">Nessuna</option>${desc(S.trips.map(t=>({...t,date:t.from}))).map(t=>opt(t.id,t.name,s.tripId)).join('')}</select>
+ ${(S.pools||[]).length?`<label>Cassa comune (vincite e perdite divise con amici)</label><select name="poolId"><option value="">Nessuna</option>${poolsDesc().map(x=>opt(x.id,`${x.name} · ${fdate(x.date)}`,s.poolId)).join('')}</select>`:''}
 </fieldset>
 <label>Note (come hai giocato, errori, stato mentale…)</label><textarea name="notes">${esc(s.notes)}</textarea>
 <div class="preview" id="pv"></div>
@@ -348,7 +373,7 @@ ${isNew?'':`<button type="button" class="btn dan full" style="margin-top:10px" d
 </form>`;
 }
 function formToSess(f,base){
- const s={...base,kind:f.kind,date:f.date,accountId:f.accountId,venue:(f.venue||'').trim(),game:f.game,hours:num(f.hours),notes:f.notes||'',tripId:f.tripId||'',
+ const s={...base,kind:f.kind,date:f.date,accountId:f.accountId,venue:(f.venue||'').trim(),game:f.game,hours:num(f.hours),notes:f.notes||'',tripId:f.tripId||'',poolId:f.poolId||'',
   stake:f.dealId?{dealId:f.dealId,pct:(f.pct===''||f.pct==null)?null:num(f.pct)}:null};
  if(f.kind==='cash')Object.assign(s,{sb:num(f.sb),bb:num(f.bb),buyIn:num(f.buyIn),cashOut:num(f.cashOut)});
  else Object.assign(s,{name:(f.name||'').trim(),ttype:f.ttype,field:num(f.field),tBuyIn:num(f.tBuyIn),tFee:num(f.tFee),entries:Math.max(1,Math.round(num(f.entries))||1),
@@ -392,11 +417,11 @@ function vStats(R){
  <div class="chips">${chip('env','all','Live + online')}${chip('env','live','Solo live')}${chip('env','online','Solo online')}</div>`;
  const L=statList();if(!L.length)return h+`<div class="empty">Nessuna sessione con questi filtri.</div>`;
  const personal=L.reduce((a,s)=>a+(R.sess[s.id]?.player||0),0);
- return h+(f.kind==='cash'?vCashStats(L,personal):vMttStats(L,personal))+`<div class="hint" style="margin:4px 2px 12px">Le statistiche misurano il risultato "al tavolo" (100% dell'azione), perché servono a capire come giochi. La tua quota personale tiene conto anche dello staking.</div>`;
+ return h+(f.kind==='cash'?vCashStats(L,personal):vMttStats(L,personal))+`<div class="hint" style="margin:4px 2px 12px">Le statistiche misurano il risultato "al tavolo" (100% dell'azione), perché servono a capire come giochi. La tua quota personale tiene conto anche dello staking.</div><button class="btn sec full" data-act="askAI">✦ Chiedi all'assistente di analizzare queste statistiche</button>`;
 }
 function vMttStats(L,personal){
  const m=mttStats(L);
- let h=`<div class="card"><h2>Riepilogo tornei</h2><div class="grid2">${kpi('Tornei',m.n)}${kpi('ROI',pc(m.roi),cl(m.roi))}${kpi('Profitto al tavolo',money(m.P,1),cl(m.P))}${kpi('Tua quota',money(personal,1),cl(personal))}${kpi('ITM (a premio)',pc(m.itm))}${kpi('Costo medio per torneo',money(m.abi))}${kpi('Re-entry medi per torneo',n1(m.reN))}${kpi('Bounty vinte',money(m.bounty))}${kpi('Totale investito',money(m.C))}${kpi('Totale incassato',money(m.R))}</div></div>`;
+ let h=`<div class="card"><h2>${qh('glossario')}Riepilogo tornei</h2><div class="grid2">${kpi('Tornei',m.n)}${kpi('ROI',pc(m.roi),cl(m.roi))}${kpi('Profitto al tavolo',money(m.P,1),cl(m.P))}${kpi('Tua quota',money(personal,1),cl(personal))}${kpi('ITM (a premio)',pc(m.itm))}${kpi('Costo medio per torneo',money(m.abi))}${kpi('Re-entry medi per torneo',n1(m.reN))}${kpi('Bounty vinte',money(m.bounty))}${kpi('Totale investito',money(m.C))}${kpi('Totale incassato',money(m.R))}</div></div>`;
  h+=verdictCard('mtt',m.n,m.lo,m.hi,pc(m.lo),pc(m.hi),'ROI');
  h+=breakdown(L,'mtt',s=>s.venue||'—','Per luogo / sito');
  h+=breakdown(L,'mtt',s=>bucket(unitBuyIn(s)),'Per fascia di buy-in');
@@ -406,7 +431,7 @@ function vMttStats(L,personal){
 }
 function vCashStats(L,personal){
  const c=cashStats(L);
- let h=`<div class="card"><h2>Riepilogo cash game</h2><div class="grid2">${kpi('Sessioni',c.n)}${kpi('Ore giocate',n1(c.H))}${kpi('Risultato al tavolo',money(c.G,1),cl(c.G))}${kpi('Tua quota',money(personal,1),cl(personal))}${kpi('Guadagno orario',money(c.w,1)+'/h',cl(c.w))}${kpi('Big blind all\'ora',isFinite(c.bbh)?n1(c.bbh)+' bb/h':'—',cl(c.bbh))}${kpi('Sessioni vinte',pc(c.winPct))}${kpi('Deviazione std oraria',c.k>1?money(c.sd)+'/h':'—')}</div></div>`;
+ let h=`<div class="card"><h2>${qh('glossario')}Riepilogo cash game</h2><div class="grid2">${kpi('Sessioni',c.n)}${kpi('Ore giocate',n1(c.H))}${kpi('Risultato al tavolo',money(c.G,1),cl(c.G))}${kpi('Tua quota',money(personal,1),cl(personal))}${kpi('Guadagno orario',money(c.w,1)+'/h',cl(c.w))}${kpi('Big blind all\'ora',isFinite(c.bbh)?n1(c.bbh)+' bb/h':'—',cl(c.bbh))}${kpi('Sessioni vinte',pc(c.winPct))}${kpi('Deviazione std oraria',c.k>1?money(c.sd)+'/h':'—')}</div></div>`;
  h+=c.H>0?verdictCard('cash',Math.round(c.H),c.lo,c.hi,money(c.lo)+'/h',money(c.hi)+'/h','Guadagno orario'):'<div class="alert y">Inserisci le ore giocate per calcolare guadagno orario e affidabilità.</div>';
  h+=breakdown(L,'cash',s=>s.venue||'—','Per luogo / sito');
  h+=breakdown(L,'cash',s=>`${s.game||'NLH'} ${n1(num(s.sb))}/${n1(num(s.bb))}`,'Per livello');
@@ -417,8 +442,8 @@ function verdictCard(kind,size,lo,hi,loT,hiT,metric){
  const th=kind==='mtt'?[100,500]:[200,1000],unit=kind==='mtt'?'tornei':'ore';
  const sample=size<th[0]?['r',`Campione molto piccolo (${size} ${unit}): i numeri sono dominati dalla fortuna. Non trarre conclusioni.`]
   :size<th[1]?['y',`Campione limitato (${size} ${unit}): indica solo una tendenza.`]:['g',`Campione discreto (${size} ${unit}).`];
- const v=size<2?"Servono più dati per stimare l'intervallo.":lo>0?'Con buona probabilità sei vincente in questo formato.':hi<0?'Con buona probabilità stai perdendo in questo formato: rivedi la selezione dei giochi e i livelli.':"Non si può ancora dire se sei vincente o perdente: il tuo risultato reale potrebbe stare in qualunque punto dell'intervallo.";
- return`<div class="card"><h2>Quanto sono affidabili questi numeri?</h2><div class="alert ${sample[0]}" style="margin-bottom:8px">${sample[1]}</div>${size>=2?`<div class="row"><span>${metric} reale (intervallo 95%)</span><b>${loT} → ${hiT}</b></div>`:''}<div class="hint">${v}</div></div>`;
+ const v=size<3?"Servono più dati per stimare l'intervallo.":lo>0?'Con buona probabilità sei vincente in questo formato.':hi<0?'Con buona probabilità stai perdendo in questo formato: rivedi la selezione dei giochi e i livelli.':"Non si può ancora dire se sei vincente o perdente: il tuo risultato reale potrebbe stare in qualunque punto dell'intervallo.";
+ return`<div class="card"><h2>${qh('statistiche')}Quanto sono affidabili questi numeri?</h2><div class="alert ${sample[0]}" style="margin-bottom:8px">${sample[1]}</div>${size>=3?`<div class="row"><span>${metric} reale (intervallo 95%)</span><b>${loT} → ${hiT}</b></div>`:''}<div class="hint">${v}</div></div>`;
 }
 function breakdown(L,kind,keyFn,title){
  const g={};L.forEach(s=>{const k=keyFn(s);(g[k]=g[k]||[]).push(s)});const keys=Object.keys(g);if(keys.length<2)return'';
@@ -429,9 +454,9 @@ function breakdown(L,kind,keyFn,title){
 /* ---------- Roll ---------- */
 function txSigned(t){const a=num(t.amount);return{deposit:a,withdraw:-a,transfer:0,bonus:a,rakeback:a,expense:t.fromRoll===false?0:-a,adjust:a}[t.type]??0}
 function vRoll(R){
- let h=`<div class="card"><h2>Conti</h2>${S.accounts.filter(a=>!a.archived||Math.abs(R.acc[a.id]||0)>0.004).map(a=>`<div class="row"><div>${esc(a.name)}<div class="sm mut">${a.type==='online'?'Online':'Live'}</div></div><b class="${(R.acc[a.id]||0)<0?'neg':''}">${money(R.acc[a.id]||0)}</b></div>`).join('')}<div class="row"><b>Totale</b><b>${money(R.roll)}</b></div>
+ let h=`<div class="card"><h2>${qh('conti')}Conti</h2>${S.accounts.filter(a=>!a.archived||Math.abs(R.acc[a.id]||0)>0.004).map(a=>`<div class="row"><div>${esc(a.name)}<div class="sm mut">${a.type==='online'?'Online':'Live'}</div></div><b class="${(R.acc[a.id]||0)<0?'neg':''}">${money(R.acc[a.id]||0)}</b></div>`).join('')}<div class="row"><b>Totale</b><b>${money(R.roll)}</b></div>
  <div class="btns" style="margin-top:10px"><button class="btn" data-act="newTx">+ Movimento</button><button class="btn sec" data-act="accounts">Gestisci conti</button></div></div>`;
- h+=`<div class="card"><h2>Riepilogo</h2><div class="grid2">${kpi('Depositi',money(R.dep))}${kpi('Prelievi',money(R.wd))}${kpi('Risultato di gioco',money(R.game,1),cl(R.game))}${kpi('Bonus e rakeback',money(R.promo))}</div></div>`;
+ h+=`<div class="card"><h2>Riepilogo</h2><div class="grid2">${kpi('Depositi',money(R.dep))}${kpi('Prelievi',money(R.wd))}${kpi('Risultato di gioco',money(R.game,1),cl(R.game))}${kpi('Bonus e rakeback',money(R.promo))}${kpi('Conguagli casse comuni',money(R.poolAdj,1),cl(R.poolAdj))}${kpi('Spese registrate',money(R.exp))}</div><div class="hint">Il risultato di gioco comprende già i conguagli delle casse comuni.</div></div>`;
  const L=desc(S.tx);
  h+=`<div class="card" style="padding:4px 14px"><div class="month" style="margin:12px 0 4px"><span>Movimenti</span></div>${L.length?L.map(t=>{const a=acc(t.accountId),to=acc(t.toId),v=txSigned(t);
   const sub=[fdate(t.date),t.type==='transfer'?`${a?.name||'?'} → ${to?.name||'?'}`:a?.name,t.cat,t.note].filter(Boolean).map(esc).join(' · ');
@@ -441,12 +466,13 @@ function vRoll(R){
 function txForm(t){
  const isNew=!t.id;t={date:today(),accountId:S.accounts.find(a=>!a.archived)?.id,fromRoll:true,...t};
  const accO=sel=>S.accounts.filter(a=>!a.archived||a.id===sel).map(a=>opt(a.id,a.name,sel)).join('');
- return`<h3>${isNew?'Nuovo movimento':'Modifica movimento'}</h3><form id="mform" data-id="${t.id||''}" onsubmit="return false" oninput="txToggle()">
+ return`<h3>${qh('conti')}${isNew?'Nuovo movimento':'Modifica movimento'}</h3><form id="mform" data-id="${t.id||''}" onsubmit="return false" oninput="txToggle()">
 <label>Tipo</label><select name="type">${Object.entries(TXT).map(([k,l])=>opt(k,l,t.type)).join('')}</select>
 <div class="f2"><div><label>Data</label><input type="date" name="date" value="${esc(t.date)}"></div><div><label id="accLbl">Conto</label><select name="accountId">${accO(t.accountId)}</select></div></div>
 <div class="only-transfer"><label>Verso il conto</label><select name="toId">${accO(t.toId||S.accounts.find(a=>a.id!==t.accountId)?.id)}</select></div>
 <label id="amtLbl">Importo</label>${inp('amount',t.amount,'0,00')}
 <div class="only-expense"><div class="f2"><div><label>Categoria</label><select name="cat">${EXPCAT.map(c=>opt(c,c,t.cat)).join('')}</select></div><div><label>Trasferta</label><select name="tripId"><option value="">Nessuna</option>${S.trips.map(x=>opt(x.id,x.name,t.tripId)).join('')}</select></div></div>
+${(S.pools||[]).length?`<label>Cassa comune</label><select name="poolId"><option value="">Nessuna</option>${poolsDesc().map(x=>opt(x.id,`${x.name} · ${fdate(x.date)}`,t.poolId)).join('')}</select>`:''}
 <label class="chk"><input type="checkbox" name="fromRoll" ${t.fromRoll!==false?'checked':''}>Pagata con i soldi del roll</label></div>
 <label>Nota</label>${inp('note',t.note,'','text')}
 <div class="hint" id="txHint"></div>
@@ -470,7 +496,7 @@ function saveTx(){
  const old=S.tx.find(x=>x.id===id);
  const t={id:id||uid(),ts:old&&old.ts||Date.now(),type:o.type,date:o.date,accountId:o.accountId,amount:a,note:(o.note||'').trim()};
  if(o.type==='transfer')t.toId=o.toId;
- if(o.type==='expense'){t.cat=o.cat;t.tripId=o.tripId||'';t.fromRoll=!!o.fromRoll}
+ if(o.type==='expense'){t.cat=o.cat;t.tripId=o.tripId||'';t.poolId=o.poolId||'';t.fromRoll=!!o.fromRoll}
  if(old)S.tx[S.tx.indexOf(old)]=t;else S.tx.push(t);
  save();closeModal();render();
 }
@@ -495,7 +521,7 @@ function saveAcc(){
  save();render();openModal(accList());
 }
 function delAcc(d){
- const used=S.sessions.some(s=>s.accountId===d.id)||S.tx.some(t=>t.accountId===d.id||t.toId===d.id);
+ const used=S.sessions.some(s=>s.accountId===d.id)||S.tx.some(t=>t.accountId===d.id||t.toId===d.id)||(S.pools||[]).some(q=>q.accountId===d.id);
  if(used)return alert('Questo conto ha sessioni o movimenti: archivialo invece di eliminarlo.');
  if(S.accounts.length<=1)return alert('Serve almeno un conto.');
  if(!confirm('Eliminare il conto?'))return;
@@ -504,21 +530,20 @@ function delAcc(d){
 
 /* ---------- Altro ---------- */
 function vMore(R){
- if(UI.sub)return`<button class="btn sec sm back" data-act="back">← Altro</button>`+({staking:vStaking,trips:vTrips,risk:vRisk,backup:vBackup,settings:vSettings}[UI.sub]||(()=>''))(R);
+ if(UI.sub)return`<button class="btn sec sm back" data-act="back">← Altro</button>`+({guide:vGuide,ai:vAI,pools:vPools,staking:vStaking,trips:vTrips,risk:vRisk,backup:vBackup,settings:vSettings}[UI.sub]||(()=>''))(R);
  const it=(k,i,t,d)=>`<div class="item" data-act="sub" data-k="${k}"><div><div class="t">${i}&nbsp; ${t}</div><div class="sm mut">${d}</div></div><div class="mut">›</div></div>`;
- return`<div class="card" style="padding:4px 14px">${it('staking','♣','Staking','Accordi con i backer, makeup ed estratti conto')}${it('trips','✈','Trasferte','Costi e risultati di ogni viaggio di gioco')}${it('risk','⚖','Profilo di rischio','Quanti buy-in tenere, stop-loss, quando scendere di livello')}${it('backup','⤓','Backup e dati','Esporta, importa, sposta i dati su un altro telefono')}${it('settings','⚙','Impostazioni','Nome e valuta')}</div>
- <div class="card"><h2>Assistente AI</h2><div class="mut">In arrivo: un assistente che analizza i tuoi dati e discute con te di gestione del bankroll, usando la tua chiave Gemini gratuita.</div></div>
+ return`<div class="card" style="padding:4px 14px">${it('guide','?','Guida',"Come si usa l'app, spiegato passo per passo")}${it('ai','✦','Assistente AI','Analizza i tuoi dati e ragiona con te su bankroll e varianza')}${it('pools','⚑','Casse comuni','Vincite e perdite divise con gli amici, con i conguagli')}${it('staking','♣','Staking','Accordi con i backer, makeup ed estratti conto')}${it('trips','✈','Trasferte','Costi e risultati di ogni viaggio di gioco')}${it('risk','⚖','Profilo di rischio','Quanti buy-in tenere, stop-loss, quando scendere di livello')}${it('backup','⤓','Backup e dati','Esporta, importa, sposta i dati su un altro telefono')}${it('settings','⚙','Impostazioni','Nome e valuta')}</div>
  <div class="hint" style="text-align:center">PokerRoll · i dati restano solo su questo dispositivo</div>`;
 }
 function vStaking(R){
- let h=`<div class="card"><h2>Come funziona</h2><div class="sm"><b>Backing:</b> il backer paga i buy-in e l'utile si divide secondo la percentuale concordata. Con il <b>makeup</b>, le perdite si accumulano e vanno recuperate prima di dividere nuove vincite.<br><b>Vendita quote:</b> vendi una percentuale del torneo (anche con markup); paghi tu il buy-in e il backer ti rimborsa la sua parte.</div></div>`;
+ let h=`<div class="card"><h2>${qh('staking')}Come funziona</h2><div class="sm"><b>Backing:</b> il backer paga i buy-in e l'utile si divide secondo la percentuale concordata. Con il <b>makeup</b>, le perdite si accumulano e vanno recuperate prima di dividere nuove vincite.<br><b>Vendita quote:</b> vendi una percentuale del torneo (anche con markup); paghi tu il buy-in e il backer ti rimborsa la sua parte.</div></div>`;
  if(!S.deals.length)h+=`<div class="empty">Nessun accordo di staking.</div>`;
  h+=S.deals.map(d=>{const D=R.deals[d.id];return`<div class="card"><h2>${esc(d.backer)}${d.active===false?' · non attivo':''}</h2><div class="sm mut" style="margin-bottom:8px">${esc(dealDesc(d))}</div><div class="grid2">${kpi('Sessioni',D.n)}${kpi('Investito dal backer',money(D.invested))}${kpi('Risultato backer',money(D.backer,1),cl(D.backer))}${kpi('Tua quota',money(D.player,1),cl(D.player))}${d.type==='split'&&d.makeup?kpi('Makeup attuale',money(D.makeup),D.makeup>0?'neg':''):''}</div><div class="btns" style="margin-top:10px"><button class="btn sec sm" data-act="stmt" data-id="${d.id}">Estratto conto</button><button class="btn sec sm" data-act="editDeal" data-id="${d.id}">Modifica</button></div></div>`}).join('');
  return h+`<button class="btn full" data-act="newDeal">+ Nuovo accordo</button>`;
 }
 function dealForm(d){
  const isNew=!d;d=d||{backer:'',type:'split',playerShare:50,makeup:false,pct:100,markup:1,active:true,notes:''};
- return`<h3>${isNew?'Nuovo accordo':'Modifica accordo'}</h3><form id="mform" data-id="${d.id||''}" onsubmit="return false" oninput="dealToggle()">
+ return`<h3>${qh('staking')}${isNew?'Nuovo accordo':'Modifica accordo'}</h3><form id="mform" data-id="${d.id||''}" onsubmit="return false" oninput="dealToggle()">
 <label>Nome del backer</label>${inp('backer',d.backer,'es. Marco','text')}
 <label>Tipo di accordo</label><select name="type">${opt('split','Backing: il backer paga i buy-in, utile diviso',d.type)}${opt('quote','Vendita quote: vendi una % del torneo',d.type)}</select>
 <div class="only-split"><label>Percentuale dell'utile al giocatore</label>${inp('playerShare',d.playerShare,'50')}
@@ -554,7 +579,7 @@ function tripStats(id,R){
  return{n:ss.length,player,exp,byCat,net:player-exp,hours:ss.reduce((a,s)=>a+num(s.hours),0)};
 }
 function vTrips(R){
- let h=`<div class="hint" style="margin-bottom:10px">Collega a una trasferta sia le sessioni sia le spese (viaggio, alloggio, vitto). Così vedi se il viaggio è stato davvero in attivo.</div>`;
+ let h=`<div class="hint" style="margin-bottom:10px">Collega a una trasferta sia le sessioni sia le spese (viaggio, alloggio, vitto). Così vedi se il viaggio è stato davvero in attivo. ${qhl('trasferte','Leggi la guida')}</div>`;
  const L=[...S.trips].sort((a,b)=>(b.from||'').localeCompare(a.from||''));
  if(!L.length)h+=`<div class="empty">Nessuna trasferta.</div>`;
  h+=L.map(t=>{const x=tripStats(t.id,R);return`<div class="card"><h2>${esc(t.name)}</h2><div class="sm mut" style="margin-bottom:8px">${fdate(t.from)}${t.to&&t.to!==t.from?' → '+fdate(t.to):''}${t.notes?' · '+esc(t.notes):''}</div><div class="grid2">${kpi('Sessioni',x.n)}${kpi('Tua quota di gioco',money(x.player,1),cl(x.player))}${kpi('Spese',money(x.exp))}${kpi('Netto trasferta',money(x.net,1),cl(x.net))}</div>${Object.keys(x.byCat).length?`<div class="sm mut" style="margin-top:8px">${Object.entries(x.byCat).map(([c,v])=>`${esc(c)} ${money(v)}`).join(' · ')}</div>`:''}<div class="btns" style="margin-top:10px"><button class="btn sec sm" data-act="newTx" data-type="expense" data-trip="${t.id}">+ Spesa</button><button class="btn sec sm" data-act="editTrip" data-id="${t.id}">Modifica</button></div></div>`}).join('');
@@ -562,7 +587,7 @@ function vTrips(R){
 }
 function tripForm(t){
  const isNew=!t;t=t||{name:'',from:today(),to:today(),notes:''};
- return`<h3>${isNew?'Nuova trasferta':'Modifica trasferta'}</h3><form id="mform" data-id="${t.id||''}" onsubmit="return false">
+ return`<h3>${qh('trasferte')}${isNew?'Nuova trasferta':'Modifica trasferta'}</h3><form id="mform" data-id="${t.id||''}" onsubmit="return false">
 <label>Nome</label>${inp('name',t.name,'es. Bratislava novembre','text')}
 <div class="f2"><div><label>Dal</label><input type="date" name="from" value="${esc(t.from)}"></div><div><label>Al</label><input type="date" name="to" value="${esc(t.to)}"></div></div>
 <label>Note</label><textarea name="notes">${esc(t.notes)}</textarea>
@@ -582,9 +607,9 @@ function vRisk(R){
  const p=curProfile(),hist=[...S.risk].sort((a,b)=>b.from.localeCompare(a.from));
  const bad=asc(S.sessions).filter(s=>R.sess[s.id]?.risk?.ok===false);
  const row=(l,v)=>`<div class="row"><span>${l}</span><b>${v}</b></div>`;
- let h=`<div class="card"><h2>Profilo attivo · ${esc(p.name)}</h2>${Object.entries(FORMATS).map(([k,l])=>row(l,num(p[k])+' buy-in')).join('')}${row('Valuta di scendere di livello dopo un calo del',n1(num(p.moveDownPct))+'%')}${row('Stop-loss giornaliero',num(p.stopLoss)>0?money(num(p.stopLoss)):'non attivo')}</div>`;
+ let h=`<div class="card"><h2>${qh('rischio')}Profilo attivo · ${esc(p.name)}</h2>${Object.entries(FORMATS).map(([k,l])=>row(l,num(p[k])+' buy-in')).join('')}${row('Valuta di scendere di livello dopo un calo del',n1(num(p.moveDownPct))+'%')}${row('Stop-loss giornaliero',num(p.stopLoss)>0?money(num(p.stopLoss)):'non attivo')}</div>`;
  h+=`<div class="card"><h2>Rispetto delle regole</h2>${bad.length?`<div style="margin-bottom:6px">${bad.length} ${bad.length===1?'sessione giocata':'sessioni giocate'} sopra il limite del profilo in vigore in quel momento.</div>`+bad.slice(-5).reverse().map(s=>`<div class="item" data-act="editSess" data-id="${s.id}"><div>${fdate(s.date)} · ${esc(sessLabel(s))}<div class="sm mut">roll richiesto ${money(R.sess[s.id].risk.req)}, disponibile ${money(R.sess[s.id].rollBefore)}</div></div></div>`).join(''):'<div class="pos">Tutte le sessioni rispettano il profilo in vigore al momento in cui sono state giocate.</div>'}<div class="hint">Le sessioni in backing (il backer paga i buy-in) non pesano sul tuo roll e non vengono controllate.</div></div>`;
- h+=`<div class="card"><h2>Nuova versione del profilo</h2><div class="chips">${Object.keys(PRESETS).map(k=>`<button class="chip" data-act="preset" data-k="${k}">${k}</button>`).join('')}</div>
+ h+=`<div class="card"><h2>${qh('rischio')}Nuova versione del profilo</h2><div class="chips">${Object.keys(PRESETS).map(k=>`<button class="chip" data-act="preset" data-k="${k}">${k}</button>`).join('')}</div>
  <form id="rform" onsubmit="return false"><div class="f2"><div><label>Nome</label>${inp('name',p.name,'','text')}</div><div><label>Valido dal</label><input type="date" name="from" value="${today()}"></div></div>
  <div class="f2">${Object.entries(FORMATS).map(([k,l])=>`<div><label>${l} (buy-in)</label>${inp(k,p[k],'','numeric')}</div>`).join('')}<div><label>Calo per scendere (%)</label>${inp('moveDownPct',p.moveDownPct,'25')}</div></div>
  <label>Stop-loss giornaliero (0 = disattivato)</label>${inp('stopLoss',p.stopLoss,'0')}
@@ -605,9 +630,9 @@ function delRisk(d){if(S.risk.length<=1)return;if(!confirm('Eliminare questa ver
 
 function vBackup(){
  const lb=S.settings.lastBackup;
- return`<div class="card"><h2>Backup</h2><div class="sm" style="margin-bottom:10px">I dati sono salvati solo su questo dispositivo. Se cambi o perdi il telefono, li recuperi solo con un backup. ${lb?'Ultimo backup: <b>'+fdate(lb)+'</b>.':'<b>Non hai ancora fatto un backup.</b>'}</div><button class="btn full" data-act="exportData">Esporta backup</button><div class="hint">Salva il file su Google Drive o mandalo a te stesso via email.</div></div>
+ return`<div class="card"><h2>${qh('backup')}Backup</h2><div class="sm" style="margin-bottom:10px">I dati sono salvati solo su questo dispositivo. Se cambi o perdi il telefono, li recuperi solo con un backup. ${lb?'Ultimo backup: <b>'+fdate(lb)+'</b>.':'<b>Non hai ancora fatto un backup.</b>'}</div><button class="btn full" data-act="exportData">Esporta backup</button><div class="hint">Salva il file su Google Drive o mandalo a te stesso via email.</div></div>
  <div class="card"><h2>Ripristino</h2><div class="sm" style="margin-bottom:10px">Carica un file di backup. <b>Sostituisce tutti i dati attuali.</b></div><button class="btn sec full" data-act="importData">Importa backup</button></div>
- <div class="card"><h2>Dati presenti</h2><div class="row"><span>Sessioni</span><b>${S.sessions.length}</b></div><div class="row"><span>Movimenti</span><b>${S.tx.length}</b></div><div class="row"><span>Accordi di staking</span><b>${S.deals.length}</b></div><div class="row"><span>Trasferte</span><b>${S.trips.length}</b></div></div>
+ <div class="card"><h2>Dati presenti</h2><div class="row"><span>Sessioni</span><b>${S.sessions.length}</b></div><div class="row"><span>Movimenti</span><b>${S.tx.length}</b></div><div class="row"><span>Accordi di staking</span><b>${S.deals.length}</b></div><div class="row"><span>Trasferte</span><b>${S.trips.length}</b></div><div class="row"><span>Casse comuni</span><b>${(S.pools||[]).length}</b></div></div>
  <button class="btn dan full" data-act="wipe">Cancella tutti i dati</button>`;
 }
 function exportData(){
@@ -633,10 +658,300 @@ function vSettings(){
  <button class="btn full" style="margin-top:12px" data-act="saveSet">Salva</button></form></div>`;
 }
 
+/* =================== Guida =================== */
+const GUIDE=[
+{id:'inizio',t:'Primi passi',b:`<b>1.</b> In <b>Altro → Impostazioni</b> scrivi il tuo nome (compare negli estratti conto e nelle casse comuni).<br><b>2.</b> In <b>Roll → Gestisci conti</b> crea un conto per ogni sito online su cui giochi. Il conto "Contanti (live)" c'è già.<br><b>3.</b> In <b>Roll → + Movimento</b> registra un <b>Deposito</b> con il roll di partenza di ogni conto.<br><b>4.</b> In <b>Altro → Profilo di rischio</b> scegli quanto rischiare.<br><b>5.</b> Da quel momento registra ogni sessione con il tasto verde <b>+</b> in <b>Sessioni</b>.<br><b>Installazione:</b> Android → menu ⋮ → "Installa app"; iPhone → Condividi → "Aggiungi alla schermata Home". Su iPhone usa sempre l'icona e non Safari: i dati sono separati.`},
+{id:'conti',t:'Roll, conti e movimenti',b:`Il <b>roll</b> è il totale dei soldi dedicati al poker, cioè la somma di tutti i conti. Lo vedi sempre in alto a destra.<br>In <b>Roll → + Movimento</b> scegli il tipo:<br>• <b>Deposito</b>: soldi che aggiungi dai tuoi fondi personali. Non è una vincita.<br>• <b>Prelievo</b>: soldi che togli per uso personale. Non è una perdita.<br>• <b>Trasferimento tra conti</b>: per esempio dai contanti a un sito online. Il totale non cambia.<br>• <b>Bonus / promo</b> e <b>Rakeback</b>: aumentano il roll ma restano separati dal risultato al tavolo.<br>• <b>Spesa</b>: viaggio, alloggio, vitto, mance. Si può collegare a una trasferta o a una cassa comune. Togli la spunta "Pagata con i soldi del roll" se la paghi con soldi personali.<br>• <b>Rettifica</b>: correzione del saldo (con il meno per togliere).<br>Tocca un movimento per modificarlo o eliminarlo. Un conto che ha movimenti non si elimina: si archivia.`},
+{id:'torneo',t:'Registrare un torneo',b:`<b>Sessioni → +</b> → scegli <b>Torneo</b>.<br>• <b>Buy-in</b>: la parte che va nel montepremi (es. 135). <b>Fee / rake</b>: la parte trattenuta dalla sala (es. 15).<br>• <b>Ingressi</b>: 1 se entri una volta, 2 se fai un re-entry, 3 se ne fai due, e così via. Ogni ingresso costa buy-in + fee.<br>• <b>N. rebuy</b> e <b>Costo rebuy</b>, <b>N. add-on</b> e <b>Costo add-on</b>: solo se il torneo li prevede.<br>• <b>Premio</b>: quanto incassi (0 se esci senza premio). <b>Bounty vinte</b>: le taglie incassate nei PKO.<br>• <b>Posizione</b> e <b>Iscritti totali</b>: facoltativi.<br>In fondo al modulo vedi subito costo totale, incasso e risultato. Se il torneo è finanziato da un backer, scegli l'accordo nel riquadro <b>Staking, trasferta, cassa comune</b>.<br><b>Esempio:</b> buy-in 135 + fee 15, 2 ingressi, premio 1.000 → costo 300, risultato +700.`},
+{id:'cash',t:'Registrare un cash game',b:`<b>Sessioni → +</b> → scegli <b>Cash game</b>.<br>• <b>Small blind / Big blind</b>: i bui del tavolo (es. 1 e 2).<br>• <b>Totale investito</b>: buy-in iniziale più tutte le ricariche.<br>• <b>Cash-out</b>: quanto hai quando ti alzi dal tavolo.<br>• <b>Ore giocate</b>: indispensabili per il guadagno orario e per capire se le statistiche sono affidabili.<br>Con il cronometro in Home le ore si compilano da sole.`},
+{id:'live',t:'Cronometro della sessione',b:`In <b>Home</b> premi <b>▶ Avvia cronometro sessione</b> quando ti siedi. Il tempo continua anche se chiudi l'app. A fine sessione premi <b>Termina e registra</b>: si apre il modulo con data e ore già compilate. <b>Annulla</b> ferma il cronometro senza registrare nulla.`},
+{id:'staking',t:'Staking (backer)',b:`In <b>Altro → Staking → + Nuovo accordo</b> crei l'accordo con un backer, poi lo scegli nel modulo della sessione.<br>• <b>Backing</b>: il backer paga i buy-in e l'utile si divide secondo la percentuale al giocatore (es. 50%). Queste sessioni non pesano sul tuo roll.<br>• <b>Con makeup</b>: le perdite si accumulano e vanno recuperate prima di dividere nuove vincite. Senza makeup ogni sessione fa storia a sé.<br>• <b>Vendita quote</b>: vendi una % del torneo; paghi tu e il backer ti rimborsa la sua parte. Il <b>markup</b> (es. 1,10) è il sovrapprezzo sulle quote.<br><b>Estratto conto</b> prepara il riepilogo da mandare al backer su WhatsApp.<br><b>Esempio</b> senza makeup al 50%: costo 300, premio 1.000 → +700 al tavolo, 350 a te e 350 al backer.`},
+{id:'casse',t:'Casse comuni con amici',b:`Servono per le uscite in cui dividete vincite e perdite. <b>Altro → Casse comuni → + Nuova cassa comune</b>.<br><b>1.</b> Dai un nome e scegli <b>Come si divide</b>: parti uguali; chi vince dà una % della vincita agli altri; oppure il vincitore tiene una % del totale e il resto va agli altri.<br><b>2.</b> Spunta le tue sessioni dell'uscita (oppure, nel modulo della sessione, scegli la cassa comune).<br><b>3.</b> Con <b>+ Aggiungi chi partecipa</b> inserisci ogni amico: nome, se ha vinto o perso e l'importo netto dell'uscita.<br><b>4.</b> Se dividete anche le spese, spunta <b>Dividere anche le spese</b>.<br>L'app mostra chi deve dare quanto a chi. <b>Condividi il conto</b> manda il riepilogo su WhatsApp; <b>Segna come regolata</b> quando avete saldato.<br><b>Esempio:</b> tu +450, Fabrizio −490, parti uguali → totale −40, cioè −20 a testa: tu dai 470 a Fabrizio.<br>Le tue statistiche restano sul tuo risultato reale (+450); nel roll entra anche il conguaglio (−470).`},
+{id:'trasferte',t:'Trasferte',b:`<b>Altro → Trasferte → + Nuova trasferta</b>. Poi collega alla trasferta sia le sessioni (campo <b>Trasferta</b> nel modulo della sessione) sia le spese (<b>+ Spesa</b> sulla scheda della trasferta). Il <b>Netto trasferta</b> è la tua quota di gioco meno le spese: ti dice se il viaggio è stato davvero in attivo.`},
+{id:'rischio',t:'Profilo di rischio e "Posso giocarlo?"',b:`Il profilo dice quanti <b>buy-in</b> devi avere nel roll per giocare un livello. Esempio: con 100 buy-in richiesti per i tornei live e un roll di 3.000 €, il buy-in massimo è 30 €.<br>• In <b>Altro → Profilo di rischio</b> scegli un modello (Conservativo, Standard, Aggressivo) o personalizzalo. Imposti anche lo <b>stop-loss giornaliero</b> e il <b>calo</b> oltre il quale valutare di scendere di livello. Poi premi <b>Salva profilo</b>.<br>• Ogni modifica crea una nuova versione con la data: le sessioni passate restano giudicate con le regole di allora.<br>• In <b>Home → Cosa puoi giocare</b> vedi il buy-in massimo per ogni formato. Inserisci formato e buy-in (per il cash la big blind) e premi <b>Posso giocarlo?</b>: verde sì, giallo al limite, rosso no.<br>• Le sessioni giocate oltre il limite hanno il badge "sopra il limite".`},
+{id:'statistiche',t:'Statistiche e affidabilità',b:`In <b>Statistiche</b> scegli Tornei o Cash game, il periodo e live/online.<br>• Le statistiche usano il risultato <b>al tavolo</b> (come giochi), non la quota che ti resta dopo staking e casse comuni.<br>• <b>Quanto sono affidabili questi numeri?</b> ti dice se il campione basta e mostra l'<b>intervallo al 95%</b>: il tuo risultato "vero" sta probabilmente lì dentro. Se l'intervallo comprende valori sia positivi sia negativi, non si può ancora dire se sei vincente.<br>• Per una tendenza servono indicativamente almeno 100 tornei o 200 ore di cash; per una certezza molti di più.<br>• Le tabelle per luogo, fascia di buy-in, tipo di torneo e durata aiutano a scegliere dove e cosa giocare.<br>• Il tasto <b>Chiedi all'assistente</b> manda queste statistiche all'AI per un'analisi.`},
+{id:'glossario',t:'Glossario',b:`• <b>ROI</b>: profitto diviso per quanto hai speso nei tornei. +20% = ogni 100 € spesi ne guadagni 20.<br>• <b>ITM</b>: percentuale di tornei chiusi a premio.<br>• <b>Costo medio per torneo</b>: spesa media per torneo, re-entry compresi.<br>• <b>Guadagno orario</b>: risultato del cash diviso per le ore.<br>• <b>bb/h</b>: big blind vinte all'ora, utile per confrontare livelli diversi.<br>• <b>Deviazione standard</b>: quanto oscillano i risultati; più è alta, più varianza.<br>• <b>Downswing</b>: calo dal punto più alto raggiunto.<br>• <b>Makeup</b>: perdite verso il backer da recuperare prima di dividere.<br>• <b>Markup</b>: sovrapprezzo sulle quote vendute.<br>• <b>Stop-loss</b>: perdita massima giornaliera oltre la quale ci si ferma.`},
+{id:'ai',t:'Assistente AI',b:`<b>Altro → Assistente AI</b>. Funziona con una chiave Gemini gratuita e personale:<br><b>1.</b> Apri aistudio.google.com/apikey con il tuo account Google.<br><b>2.</b> Premi <b>Create API key</b> e copia la chiave.<br><b>3.</b> Incollala nell'app e premi <b>Salva e verifica</b>.<br>Non serve attivare la fatturazione. A ogni domanda l'assistente legge i tuoi dati aggiornati: puoi chiedergli analisi ("dove sto perdendo soldi?") o come si fa qualcosa nell'app. Se compare "limite raggiunto", scegli un modello <b>Flash-Lite</b> nelle impostazioni dell'assistente. I nomi dei backer non vengono mai inviati; le note delle sessioni solo se lo attivi.`},
+{id:'backup',t:'Backup e cambio telefono',b:`I dati sono <b>solo sul tuo telefono</b>: se lo perdi o lo cambi, li recuperi solo con un backup.<br>• <b>Altro → Backup e dati → Esporta backup</b>: salva il file su Google Drive o mandalo a te stesso via email. Fallo almeno ogni due settimane (la Home te lo ricorda).<br>• Sul nuovo telefono installa l'app, poi <b>Importa backup</b> e scegli il file. Sostituisce tutti i dati presenti.<br>• La chiave dell'assistente AI non è nel backup: va reinserita.<br>• Gli aggiornamenti dell'app non cancellano i dati.`},
+];
+const qh=id=>`<button type="button" class="qh" data-act="help" data-k="${id}" aria-label="Guida">?</button>`;
+const qhl=(id,l)=>`<a href="#" data-act="help" data-k="${id}">${l}</a>`;
+const guideText=()=>GUIDE.map(g=>'## '+g.t+'\n'+g.b.replace(/<br>/g,'\n').replace(/<[^>]+>/g,'')).join('\n\n');
+function vGuide(){
+ return`<div class="card"><h2>Guida rapida</h2><div class="sm">Tocca un argomento per aprirlo. I pulsanti <span class="qh" style="cursor:default">?</span> nelle varie schermate aprono la spiegazione di quella sezione. Puoi anche chiedere all'<a href="#" data-act="sub" data-k="ai">assistente AI</a> "come faccio a…?".</div></div>`
+ +GUIDE.map(g=>`<details class="card"><summary>${g.t}</summary><div class="guide" style="margin-top:10px">${g.b}</div></details>`).join('');
+}
+function openHelp(id){
+ const g=GUIDE.find(x=>x.id===id)||GUIDE[0];
+ $('#hsheet').innerHTML=`<h3>${g.t}</h3><div class="guide">${g.b}</div><div class="btns" style="margin-top:16px"><button class="btn" data-act="closeHelp">Ho capito</button><button class="btn sec" data-act="allGuide">Tutte le guide</button></div>`;
+ $('#helpm').classList.add('open');$('#hsheet').scrollTop=0;
+}
+const closeHelp=()=>$('#helpm').classList.remove('open');
+
+/* =================== Casse comuni =================== */
+const meName=()=>S.settings.name||'Io';
+const poolsDesc=()=>[...(S.pools||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+function poolModeDesc(p){const e=p.includeExp?' · spese condivise':' · spese escluse';
+ if(p.mode==='pct')return`Chi vince dà il ${n1(num(p.pct))}% della vincita agli altri`+e;
+ if(p.mode==='winner')return`Il vincitore tiene il ${n1(num(p.winPct))}% del totale, il resto diviso tra gli altri`+e;
+ return'Parti uguali'+e}
+function poolLinks(p){return{ses:S.sessions.filter(s=>s.poolId===p.id).map(s=>s.id),tx:S.tx.filter(t=>t.type==='expense'&&t.poolId===p.id).map(t=>t.id)}}
+function poolCalc(p,SR,links){
+ links=links||poolLinks(p);
+ const ses=links.ses.map(id=>S.sessions.find(s=>s.id===id)).filter(Boolean),txs=links.tx.map(id=>S.tx.find(t=>t.id===id)).filter(Boolean);
+ const inc=!!p.includeExp;
+ const parts=[{me:true,name:meName(),res:ses.reduce((a,s)=>a+((SR[s.id]||{}).player||0),0),exp:txs.reduce((a,t)=>a+num(t.amount),0)},
+  ...(p.people||[]).map(x=>({name:x.name,res:num(x.res),exp:num(x.exp)}))];
+ const n=parts.length,tot=parts.reduce((a,x)=>a+x.res,0),totExp=inc?parts.reduce((a,x)=>a+x.exp,0):0;
+ let fallback=false,wi=-1;parts.forEach(x=>x.g=x.res);
+ if(n>1){
+  if(p.mode==='pct'){const k=Math.min(100,Math.max(0,num(p.pct)))/100;
+   parts.forEach((x,i)=>{if(x.res>0){const give=x.res*k;x.g-=give;parts.forEach((y,j)=>{if(j!==i)y.g+=give/(n-1)})}})}
+  else if(p.mode==='winner'){wi=parts.reduce((b,x,i)=>x.res>parts[b].res?i:b,0);
+   if(tot>0){const k=Math.min(100,Math.max(0,num(p.winPct)))/100;parts.forEach((x,i)=>x.g=i===wi?tot*k:tot*(1-k)/(n-1))}
+   else{fallback=true;parts.forEach(x=>x.g=tot/n)}}
+  else parts.forEach(x=>x.g=tot/n);
+ }
+ parts.forEach(x=>{x.share=x.g-(inc?totExp/n:0);x.actual=x.res-(inc?x.exp:0);x.bal=x.share-x.actual});
+ const cr=parts.map((x,i)=>({i,v:Math.round(x.bal*100)/100})).filter(x=>x.v>0.004).sort((a,b)=>b.v-a.v);
+ const db=parts.map((x,i)=>({i,v:Math.round(-x.bal*100)/100})).filter(x=>x.v>0.004).sort((a,b)=>b.v-a.v);
+ const tr=[];let a=0,b=0;
+ while(a<db.length&&b<cr.length){const v=Math.round(Math.min(db[a].v,cr[b].v)*100)/100;if(v>0.004)tr.push({from:parts[db[a].i].name,to:parts[cr[b].i].name,v});db[a].v-=v;cr[b].v-=v;if(db[a].v<=0.004)a++;if(cr[b].v<=0.004)b++}
+ const dates=[p.date,...ses.map(s=>s.date),...txs.map(t=>t.date)].filter(Boolean).sort();
+ return{parts,n,tot,totExp,inc,tr,myAdj:parts[0].bal,fallback,wi,date:dates[dates.length-1]||p.date||today(),nSes:ses.length,nTx:txs.length};
+}
+function poolTable(c){
+ const rows=c.parts.map((x,i)=>`<tr><td>${esc(x.name)}${i===c.wi&&!c.fallback?' ★':''}</td><td class="${cl(x.res)}">${money(x.res,1)}</td>${c.inc?`<td>${money(x.exp)}</td>`:''}<td>${money(x.share,1)}</td><td class="${cl(x.bal)}">${Math.abs(x.bal)<0.005?'—':x.bal>0?'riceve '+money(x.bal):'dà '+money(-x.bal)}</td></tr>`).join('');
+ return`<table><tr><th></th><th>Risultato</th>${c.inc?'<th>Spese</th>':''}<th>Quota</th><th>Conguaglio</th></tr>${rows}</table>
+ <div class="row sm"><span>Totale del gruppo</span><b class="${cl(c.tot)}">${money(c.tot,1)}</b></div>${c.inc?`<div class="row sm"><span>Spese condivise</span><b>${money(c.totExp)}</b></div>`:''}
+ ${c.fallback?'<div class="hint">Il gruppo ha chiuso in perdita: la perdita viene divisa in parti uguali.</div>':''}
+ <div style="margin-top:8px">${c.tr.length?c.tr.map(t=>`<div class="light" style="margin-top:6px"><span class="dot y"></span><div><b>${esc(t.from)}</b> dà <b>${money(t.v)}</b> a <b>${esc(t.to)}</b></div></div>`).join(''):'<div class="hint">Nessun conguaglio necessario.</div>'}</div>`;
+}
+function poolText(p,c){
+ let t=`CASSA COMUNE · ${p.name}\n${fdate(c.date)} · ${poolModeDesc(p)}\n\nRisultati:\n`;
+ c.parts.forEach(x=>t+=`${x.name}: ${money(x.res,1)}${c.inc&&x.exp?` (spese ${money(x.exp)})`:''}\n`);
+ t+=`Totale: ${money(c.tot,1)}${c.inc?` · spese ${money(c.totExp)}`:''}\n\nQuote:\n`;
+ c.parts.forEach(x=>t+=`${x.name}: ${money(x.share,1)}\n`);
+ t+=`\nConguagli:\n`+(c.tr.length?c.tr.map(x=>`${x.from} dà ${money(x.v)} a ${x.to}`).join('\n'):'Nessun conguaglio');
+ return t;
+}
+function vPools(R){
+ let h=`<div class="card"><h2>${qh('casse')}Come funziona</h2><div class="sm">Una cassa comune per ogni uscita o trasferta. Ognuno gioca con i suoi soldi e alla fine si dividono vincite e perdite. Le tue sessioni e spese vengono lette dall'app; per gli amici inserisci il risultato netto. L'app calcola chi deve dare quanto a chi, e sul tuo roll entra solo il conguaglio.</div></div>`;
+ const L=poolsDesc();if(!L.length)h+=`<div class="empty">Nessuna cassa comune.</div>`;
+ h+=L.map(p=>{const c=R.pools[p.id];return`<div class="card item" style="padding:12px 14px" data-act="viewPool" data-id="${p.id}"><div><div class="t">${esc(p.name)}</div><div class="sm mut">${fdate(c.date)} · ${c.n} partecipanti · totale ${money(c.tot,1)}</div><span class="badge ${p.settled||!c.tr.length?'':'w'}">${!c.tr.length?'nessun conguaglio':p.settled?'regolata':'da regolare'}</span></div><div class="r"><b class="${cl(c.myAdj)}">${money(c.myAdj,1)}</b><div class="sm mut">tuo conguaglio</div></div></div>`}).join('');
+ return h+`<button class="btn full" data-act="newPool">+ Nuova cassa comune</button>`;
+}
+function personRow(x){
+ const v=num(x.res);
+ return`<div class="prow" style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:2px 10px 10px;margin:10px 0">
+ <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end"><div><label>Nome</label><input name="pname" list="pnames" value="${esc(x.name)}" placeholder="es. Fabrizio" autocomplete="off"></div><button type="button" class="btn dan sm" style="height:44px" data-act="rmP" aria-label="Rimuovi">✕</button></div>
+ <div class="f2"><div><label>Esito</label><select name="psign">${opt('+','Ha vinto',v<0?'-':'+')}${opt('-','Ha perso',v<0?'-':'+')}</select></div><div><label>Importo netto</label>${inp('pres',v?Math.abs(v):'','0')}</div></div>
+ <div class="only-exp"><label>Spese che ha pagato</label>${inp('pexp',num(x.exp)||'','0')}</div></div>`;
+}
+function poolForm(p){
+ const isNew=!p;
+ p=p||{name:'',date:today(),accountId:(S.accounts.find(a=>!a.archived&&a.type==='live')||S.accounts.find(a=>!a.archived)||{}).id,mode:'equal',pct:10,winPct:70,includeExp:false,people:[{name:'',res:0,exp:0}],settled:false};
+ const lk=p.id?poolLinks(p):{ses:[],tx:[]};
+ const near=d=>{if(!d)return false;const a=new Date(d),b=new Date(p.date||today());return Math.abs(a-b)<=10*864e5};
+ const ses=desc(S.sessions.filter(s=>s.poolId===p.id&&p.id||near(s.date)));
+ const exs=desc(S.tx.filter(t=>t.type==='expense'&&(t.poolId===p.id&&p.id||near(t.date))));
+ const other=x=>x.poolId&&x.poolId!==p.id?' <span class="badge w">in un\'altra cassa</span>':'';
+ const names=[...new Set((S.pools||[]).flatMap(q=>(q.people||[]).map(x=>x.name)).filter(Boolean))];
+ const chk=(n,v,on,txt)=>`<label class="chk" style="align-items:flex-start;margin:8px 0"><input type="checkbox" name="${n}" value="${v}" ${on?'checked':''} style="margin-top:4px"><span>${txt}</span></label>`;
+ return`<h3>${qh('casse')}${isNew?'Nuova cassa comune':'Modifica cassa comune'}</h3>
+<form id="mform" data-id="${p.id||''}" onsubmit="return false" oninput="poolPreview()">
+<label>Nome dell'uscita</label>${inp('name',p.name,'es. Serata al casinò con Fabrizio','text')}
+<div class="f2"><div><label>Data</label><input type="date" name="date" value="${esc(p.date)}"></div><div><label>Conto per i conguagli</label><select name="accountId">${S.accounts.filter(a=>!a.archived||a.id===p.accountId).map(a=>opt(a.id,a.name,p.accountId)).join('')}</select></div></div>
+<label>Come si divide</label><select name="mode">${opt('equal','Parti uguali: totale diviso per tutti',p.mode)}${opt('pct','Chi vince dà una % della vincita agli altri',p.mode)}${opt('winner','Il vincitore tiene la fetta più grossa',p.mode)}</select>
+<div class="only-pct"><label>% della vincita data agli altri</label>${inp('pct',p.pct,'10')}</div>
+<div class="only-winner"><label>% del totale che tiene il vincitore</label>${inp('winPct',p.winPct,'70')}<div class="hint">Il vincitore è chi ha il risultato migliore. Il resto viene diviso in parti uguali tra gli altri.</div></div>
+<label class="chk"><input type="checkbox" name="includeExp" ${p.includeExp?'checked':''}>Dividere anche le spese (viaggio, cibo, alloggio…)</label>
+<fieldset><legend>Tu (${esc(meName())})</legend>
+ <label>Le tue sessioni di questa uscita</label>
+ ${ses.length?ses.map(s=>chk('lses',s.id,lk.ses.includes(s.id),`${fdate(s.date)} · ${esc(sessLabel(s))} · <b class="${cl(_R.sess[s.id]?.player)}">${money(_R.sess[s.id]?.player||0,1)}</b>${other(s)}`)).join(''):'<div class="hint">Nessuna sessione nei 10 giorni intorno alla data. Registrala da Sessioni e collegala a questa cassa.</div>'}
+ <div class="only-exp"><label>Le tue spese</label>${exs.length?exs.map(t=>chk('ltx',t.id,lk.tx.includes(t.id),`${fdate(t.date)} · ${esc(t.cat||'Spesa')}${t.note?' · '+esc(t.note):''} · <b>${money(num(t.amount))}</b>${other(t)}`)).join(''):'<div class="hint">Nessuna spesa registrata in quei giorni. Aggiungile da Roll → Movimento → Spesa.</div>'}</div>
+</fieldset>
+<fieldset><legend>Chi partecipa</legend>
+ <div class="hint">Importo netto = quanto ha vinto o perso in tutta l'uscita (incassi meno buy-in).</div>
+ <div id="prows">${(p.people&&p.people.length?p.people:[{name:'',res:0,exp:0}]).map(personRow).join('')}</div>
+ <datalist id="pnames">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
+ <button type="button" class="btn sec full" data-act="addP">+ Aggiungi chi partecipa</button>
+</fieldset>
+<div class="preview" id="pv"></div>
+<label class="chk"><input type="checkbox" name="settled" ${p.settled?'checked':''}>Conguagli già regolati</label>
+<div class="btns" style="margin-top:14px"><button class="btn" data-act="savePool">Salva</button><button type="button" class="btn sec" data-act="close">Annulla</button></div>
+${isNew?'':`<button type="button" class="btn dan full" style="margin-top:10px" data-act="delPool" data-id="${p.id}">Elimina cassa comune</button>`}
+</form>`;
+}
+function poolFromForm(){
+ const f=$('#mform'),fd=new FormData(f),o=Object.fromEntries(fd);
+ const nm=fd.getAll('pname'),sg=fd.getAll('psign'),rs=fd.getAll('pres'),ex=fd.getAll('pexp');
+ const rows=nm.map((n,i)=>({name:(n||'').trim(),res:(sg[i]==='-'?-1:1)*Math.abs(num(rs[i])),exp:Math.abs(num(ex[i]))}));
+ const p={id:f.dataset.id||'',name:(o.name||'').trim(),date:o.date,accountId:o.accountId,mode:o.mode,pct:num(o.pct),winPct:num(o.winPct),includeExp:!!o.includeExp,settled:!!o.settled,people:rows};
+ return{p,rows,links:{ses:fd.getAll('lses'),tx:fd.getAll('ltx')}};
+}
+function poolPreview(){
+ const f=$('#mform');if(!f||!$('#prows'))return;
+ const {p,links}=poolFromForm();
+ f.querySelectorAll('.only-pct').forEach(e=>e.style.display=p.mode==='pct'?'':'none');
+ f.querySelectorAll('.only-winner').forEach(e=>e.style.display=p.mode==='winner'?'':'none');
+ f.querySelectorAll('.only-exp').forEach(e=>e.style.display=p.includeExp?'':'none');
+ p.people=p.people.map((x,i)=>({...x,name:x.name||'Partecipante '+(i+2)}));
+ $('#pv').innerHTML=`<div style="padding:8px 0">${poolTable(poolCalc(p,_R.sess,links))}</div>`;
+}
+function savePool(){
+ const {p,rows,links}=poolFromForm();
+ if(!p.name)return alert("Dai un nome all'uscita.");
+ if(!p.date)return alert('Inserisci la data.');
+ if(rows.some(x=>!x.name&&(x.res||x.exp)))return alert('Manca il nome di un partecipante.');
+ p.people=rows.filter(x=>x.name);
+ if(!p.people.length)return alert('Aggiungi almeno un amico con il tasto +.');
+ if(p.mode==='winner'&&!(p.winPct>=0&&p.winPct<=100))return alert('La % del vincitore deve essere tra 0 e 100.');
+ if(p.mode==='pct'&&!(p.pct>=0&&p.pct<=100))return alert('La percentuale deve essere tra 0 e 100.');
+ if(!links.ses.length&&!confirm('Non hai collegato nessuna tua sessione: il tuo risultato sarà 0. Salvare comunque?'))return;
+ const old=(S.pools||[]).find(x=>x.id===p.id);p.id=p.id||uid();
+ S.sessions.forEach(s=>{if(links.ses.includes(s.id))s.poolId=p.id;else if(s.poolId===p.id)s.poolId=''});
+ S.tx.forEach(t=>{if(links.tx.includes(t.id))t.poolId=p.id;else if(t.poolId===p.id)t.poolId=''});
+ S.pools=S.pools||[];if(old)S.pools[S.pools.indexOf(old)]=p;else S.pools.push(p);
+ save();render();openModal(poolView(p.id));
+}
+function poolView(id){
+ const p=S.pools.find(x=>x.id===id),c=_R.pools[id];
+ return`<h3>${esc(p.name)}</h3><div class="sm mut" style="margin-bottom:10px">${fdate(c.date)} · ${esc(poolModeDesc(p))}</div>
+ <div class="card">${poolTable(c)}</div>
+ <div class="card"><div class="row"><span>Effetto sul tuo roll</span><b class="${cl(c.myAdj)}">${money(c.myAdj,1)}</b></div><div class="hint">Le tue sessioni restano registrate con il tuo risultato reale (per le statistiche). Il conguaglio viene aggiunto a parte al conto scelto.</div></div>
+ <pre id="stmtText" style="display:none">${esc(poolText(p,c))}</pre>
+ <div class="btns"><button class="btn" data-act="share">Condividi il conto</button><button class="btn sec" data-act="editPool" data-id="${id}">Modifica</button></div>
+ <div class="btns" style="margin-top:8px">${c.tr.length?`<button class="btn sec" data-act="togglePaid" data-id="${id}">${p.settled?'Segna da regolare':'Segna come regolata'}</button>`:''}<button class="btn sec" data-act="close">Chiudi</button></div>`;
+}
+function delPool(d){if(!confirm('Eliminare la cassa comune? Le sessioni restano, ma il conguaglio sparisce dal roll.'))return;S.pools=S.pools.filter(x=>x.id!==d.id);S.sessions.forEach(s=>{if(s.poolId===d.id)s.poolId=''});S.tx.forEach(t=>{if(t.poolId===d.id)t.poolId=''});save();closeModal();render()}
+
+/* =================== Assistente AI (Gemini) =================== */
+const AIKEY='pokerroll_ai';
+function loadAI(){const d={key:'',model:'',models:[],notes:false,hist:[]};try{return{...d,...JSON.parse(localStorage.getItem(AIKEY)||'{}')}}catch(e){return d}}
+let AI=loadAI();
+function saveAI(){try{localStorage.setItem(AIKEY,JSON.stringify(AI))}catch(e){}}
+const GAPI='https://generativelanguage.googleapis.com/v1beta/';
+async function gfetch(path,body){
+ const r=await fetch(GAPI+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','x-goog-api-key':AI.key},body:body?JSON.stringify(body):undefined});
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok){const e=new Error((j.error&&j.error.message)||('Errore '+r.status));e.status=r.status;throw e}
+ return j;
+}
+function aiErr(e){
+ const m=String(e&&e.message||e);
+ if(e&&e.status===429)return`Hai raggiunto il limite di richieste gratuite del modello ${AI.model}. Riprova più tardi, oppure scegli un modello "Flash-Lite" nelle impostazioni qui sotto: ha limiti giornalieri più alti.`;
+ if(/API key not valid|API_KEY_INVALID/i.test(m))return'La chiave non è valida. Controlla di averla copiata per intero.';
+ if(e&&e.status===403)return'La chiave non ha accesso a Gemini. Creane una nuova su Google AI Studio.';
+ if(e&&e.status===404)return`Il modello ${AI.model} non è più disponibile: premi "Aggiorna modelli" e scegline un altro.`;
+ if(/Failed to fetch|NetworkError|Load failed/i.test(m))return'Connessione assente: l\'assistente funziona solo online.';
+ return'Errore: '+m;
+}
+async function aiLoadModels(){
+ const j=await gfetch('models?pageSize=200');
+ const ms=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')&&/gemini/i.test(m.name)&&!/(image|tts|audio|live|embed|vision|robotics|computer|native)/i.test(m.name))
+  .map(m=>({id:m.name.replace(/^models\//,''),label:m.displayName||m.name}));
+ if(!ms.length)throw new Error('nessun modello disponibile per questa chiave');
+ AI.models=ms;if(!ms.some(m=>m.id===AI.model))AI.model=pickModel(ms);
+}
+function pickModel(ms){
+ const ver=id=>parseFloat((id.match(/gemini-(\d+(?:\.\d+)?)/)||[])[1]||0);
+ const stable=ms.filter(m=>/^gemini-\d+(\.\d+)?-flash(-lite)?$/.test(m.id)).sort((a,b)=>ver(b.id)-ver(a.id));
+ return(stable.find(m=>!/lite/.test(m.id))||stable[0]||ms.find(m=>/flash/.test(m.id))||ms[0]).id;
+}
+async function aiVerify(){
+ const k=(($('#aiKey')||{}).value||'').trim();if(!k)return alert('Incolla prima la chiave.');
+ const btn=$('#aiVerifyBtn');btn.disabled=true;btn.textContent='Verifico la chiave…';
+ AI.key=k;
+ try{await aiLoadModels();saveAI();render()}
+ catch(e){AI.key='';btn.disabled=false;btn.textContent='Salva e verifica';alert('Verifica non riuscita. '+aiErr(e))}
+}
+const AI_SYS=`Sei l'assistente di PokerRoll, un'app di gestione del bankroll per giocatori di poker. Rispondi sempre in italiano, in modo diretto e critico, come un coach esperto di bankroll management, selezione dei giochi e varianza. Non sei un consulente finanziario.
+Regole:
+- Basa ogni affermazione sui dati forniti qui sotto e non inventare numeri. Se un dato manca o è insufficiente, dillo chiaramente.
+- Valuta sempre la dimensione del campione: con poche decine di tornei o poche centinaia di ore i risultati sono dominati dalla varianza. Usa gli intervalli di confidenza (IC95%) forniti e spiega cosa significano in parole semplici.
+- Distingui il risultato al tavolo (misura come gioca) dalla quota personale (dopo lo staking).
+- Controlla il rispetto del profilo di rischio (buy-in richiesti, stop-loss, discesa di livello) e segnala con precisione gli scostamenti.
+- Non incoraggiare mai a recuperare le perdite alzando i livelli o giocando di più. Se dai dati emergono segnali di gioco problematico (depositi ripetuti per coprire perdite, regole violate spesso, sessioni lunghe dopo grosse perdite), dillo con franchezza e suggerisci di fermarsi e parlarne con qualcuno di fiducia.
+- Le casse comuni sono uscite in cui il giocatore divide vincite e perdite con amici: il conguaglio è una redistribuzione e non dice nulla su come ha giocato.
+- Se l'utente chiede come si usa l'app o come fare un'operazione, spiega i passaggi seguendo il MANUALE DELL'APP, citando i nomi esatti di menu e pulsanti. Non inventare funzioni che non esistono: se una cosa non si può fare, dillo.
+- Il tuo campo è l'uso dell'app e la gestione del bankroll, l'analisi dei risultati, la selezione di livelli e formati, lo staking. Non analizzare singole mani se non richiesto.
+- Sii conciso: al massimo 250 parole, salvo che l'utente chieda di più. Usa elenchi puntati quando aiutano.`;
+function aiContext(){
+ const R=_R,p=curProfile(),L=[],bn={};let bi=0;const bname=d=>bn[d.id]||(bn[d.id]='Backer '+(++bi));
+ L.push(`Oggi: ${today()}. Valuta: ${S.settings.currency}. Sessioni registrate: ${S.sessions.length}.`);
+ L.push(`ROLL attuale ${money(R.roll)}; depositi totali ${money(R.dep)}; prelievi ${money(R.wd)}; risultato di gioco personale ${money(R.game)}; bonus e rakeback ${money(R.promo)}; spese ${money(R.exp)}; calo dal massimo ${money(R.dd)} (${pc(R.ddPct)}); risultato di oggi ${money(R.todayNet)}.`);
+ L.push(`PROFILO DI RISCHIO attivo "${p.name}" (buy-in richiesti): `+Object.entries(FORMATS).map(([k,l])=>`${l} ${num(p[k])}`).join(', ')+`; scendere di livello dopo un calo del ${num(p.moveDownPct)}%; stop-loss giornaliero ${num(p.stopLoss)>0?money(num(p.stopLoss)):'non attivo'}.`);
+ L.push(`Buy-in massimo consentito oggi: `+Object.entries(FORMATS).map(([k,l])=>`${l} ${money(Math.max(0,R.roll)/(num(p[k])||1))}`).join(', ')+'.');
+ const bad=S.sessions.filter(s=>R.sess[s.id]&&R.sess[s.id].risk&&R.sess[s.id].risk.ok===false);
+ L.push(`Sessioni giocate sopra il limite del profilo: ${bad.length}.`);
+ for(const env of['live','online']){
+  const M=S.sessions.filter(s=>s.kind==='mtt'&&setting(s)===env);
+  if(M.length){const m=mttStats(M);L.push(`TORNEI ${env.toUpperCase()}: ${m.n} tornei; investito ${money(m.C)}; incassato ${money(m.R)}; profitto al tavolo ${money(m.P)}; ROI ${pc(m.roi)} (${m.n>=3?`IC95% da ${pc(m.lo)} a ${pc(m.hi)}`:'IC95% non calcolabile: troppo pochi tornei'}); ITM ${pc(m.itm)}; costo medio ${money(m.abi)}; re-entry medi ${n1(m.reN)}; bounty ${money(m.bounty)}.`);
+   const g={};M.forEach(s=>{const k=bucket(unitBuyIn(s));(g[k]=g[k]||[]).push(s)});
+   L.push('  per fascia di buy-in: '+Object.entries(g).map(([k,a])=>{const x=mttStats(a);return`${k}: ${x.n} tornei, ${money(x.P)}, ROI ${pc(x.roi)}`}).join('; '));
+   const t={};M.forEach(s=>{const k=s.ttype||'—';(t[k]=t[k]||[]).push(s)});
+   L.push('  per tipo: '+Object.entries(t).map(([k,a])=>{const x=mttStats(a);return`${k}: ${x.n}, ${money(x.P)}, ROI ${pc(x.roi)}`}).join('; '));}
+  const C=S.sessions.filter(s=>s.kind==='cash'&&setting(s)===env);
+  if(C.length){const c=cashStats(C);L.push(`CASH ${env.toUpperCase()}: ${c.n} sessioni; ${n1(c.H)} ore; risultato al tavolo ${money(c.G)}; ${money(c.w)}/h (${c.k>=3?`IC95% da ${money(c.lo)} a ${money(c.hi)}`:'IC95% non calcolabile: troppo poche sessioni'}); ${isFinite(c.bbh)?n1(c.bbh)+' bb/h; ':''}sessioni vinte ${pc(c.winPct)}; deviazione standard ${money(c.sd)}/h.`);
+   const g={};C.forEach(s=>{const k=`${s.game||'NLH'} ${n1(num(s.sb))}/${n1(num(s.bb))}`;(g[k]=g[k]||[]).push(s)});
+   L.push('  per livello: '+Object.entries(g).map(([k,a])=>{const x=cashStats(a);return`${k}: ${x.n} sessioni, ${n1(x.H)} h, ${money(x.G)}`}).join('; '));}
+ }
+ S.deals.forEach(d=>{const D=R.deals[d.id];L.push(`STAKING con ${bname(d)}: ${dealDesc(d)}; ${D.n} sessioni; investito dal backer ${money(D.invested)}; risultato backer ${money(D.backer)}; quota giocatore ${money(D.player)}${d.type==='split'&&d.makeup?'; makeup attuale '+money(D.makeup):''}.`)});
+ S.trips.forEach(t=>{const x=tripStats(t.id,R);L.push(`TRASFERTA "${t.name}" (${t.from}): ${x.n} sessioni, quota di gioco ${money(x.player)}, spese ${money(x.exp)}, netto ${money(x.net)}.`)});
+ poolsDesc().slice(0,10).forEach((q,i)=>{const c=R.pools[q.id];L.push(`CASSA COMUNE ${i+1} (${c.date}): ${c.n} partecipanti; divisione: ${poolModeDesc(q)}; totale del gruppo ${money(c.tot)}; mio risultato ${money(c.parts[0].res)}; mia quota ${money(c.parts[0].share)}; conguaglio sul mio roll ${money(c.myAdj)}.`)});
+ const last=desc(S.sessions).slice(0,40).reverse();
+ if(last.length){L.push(`ULTIME ${last.length} SESSIONI (data | formato | ambiente | luogo | dettagli | costo | incasso | risultato al tavolo | quota personale | ore${AI.notes?' | note':''}):`);
+  last.forEach(s=>{const x=R.sess[s.id]||{};L.push([s.date,s.kind==='mtt'?'torneo '+(s.ttype||''):'cash '+(s.game||''),setting(s),s.venue||'-',
+   s.kind==='mtt'?`buy-in ${money(unitBuyIn(s))}, ${Math.max(1,num(s.entries))} ingressi${num(s.rebuys)?', '+num(s.rebuys)+' rebuy':''}${num(s.addons)?', '+num(s.addons)+' add-on':''}${num(s.position)?', posizione '+num(s.position)+(num(s.field)?' su '+num(s.field):''):''}${x.staked?', in staking':''}${x.risk&&x.risk.ok===false?', SOPRA IL LIMITE':''}`:`bui ${n1(num(s.sb))}/${n1(num(s.bb))}${x.risk&&x.risk.ok===false?', SOPRA IL LIMITE':''}`,
+   money(cost(s)),money(ret(s)),money(gross(s)),money(x.player||0),n1(num(s.hours))+' h',AI.notes&&s.notes?String(s.notes).replace(/\s+/g,' ').slice(0,200):''].filter((v,i)=>i<10||AI.notes).join(' | '))});}
+ return L.join('\n');
+}
+function md(t){return esc(t).split('\n').map(l=>{l=l.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');if(/^#{1,4}\s/.test(l))return'<b>'+l.replace(/^#{1,4}\s/,'')+'</b>';if(/^\s*[-*•]\s+/.test(l))return'• '+l.replace(/^\s*[-*•]\s+/,'');return l}).join('<br>')}
+function aiScroll(){requestAnimationFrame(()=>window.scrollTo(0,document.body.scrollHeight))}
+async function aiSend(text){
+ text=String(text??(($('#aiIn')||{}).value||'')).trim();if(!text||UI.aiBusy||!AI.key)return;
+ AI.hist.push({r:'user',t:text});UI.aiBusy=true;saveAI();render();aiScroll();
+ try{
+  const msgs=[];AI.hist.filter(m=>m.r!=='err').slice(-14).forEach(m=>{const role=m.r==='user'?'user':'model';const last=msgs[msgs.length-1];if(last&&last.role===role)last.parts[0].text+='\n\n'+m.t;else msgs.push({role,parts:[{text:m.t}]})});
+  while(msgs.length&&msgs[0].role!=='user')msgs.shift();
+  const j=await gfetch(`models/${AI.model}:generateContent`,{systemInstruction:{parts:[{text:AI_SYS+"\n\nMANUALE DELL'APP:\n"+guideText()+"\n\nDATI DELL'UTENTE (aggiornati ad ora):\n"+aiContext()}]},contents:msgs,generationConfig:{temperature:0.4}});
+  const c=j.candidates&&j.candidates[0];
+  const out=((c&&c.content&&c.content.parts)||[]).filter(x=>!x.thought&&x.text).map(x=>x.text).join('').trim();
+  AI.hist.push(out?{r:'model',t:out}:{r:'err',t:'Il modello non ha risposto (risposta bloccata o vuota). Prova a riformulare la domanda.'});
+ }catch(e){AI.hist.push({r:'err',t:aiErr(e)})}
+ UI.aiBusy=false;if(AI.hist.length>60)AI.hist=AI.hist.slice(-60);saveAI();
+ if(UI.tab==='more'&&UI.sub==='ai'){render();aiScroll()}
+}
+function vAI(){
+ if(!AI.key)return`<div class="card"><h2>${qh('ai')}Attiva l'assistente</h2><div class="sm">L'assistente usa Gemini di Google con <b>la tua chiave personale gratuita</b>: non paghi nulla e i limiti di utilizzo valgono solo per te.</div>
+ <ol class="sm" style="padding-left:18px;margin:10px 0">
+ <li>Apri <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> e accedi con il tuo account Google.</li>
+ <li>Premi <b>Create API key</b> (se chiede un progetto, accetta quello proposto).</li>
+ <li>Copia la chiave e incollala qui sotto.</li></ol>
+ <label>Chiave API Gemini</label><input id="aiKey" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…">
+ <button class="btn full" id="aiVerifyBtn" style="margin-top:10px" data-act="aiVerify">Salva e verifica</button>
+ <div class="hint">Non attivare la fatturazione su Google: il piano gratuito basta. La chiave resta solo su questo telefono e non finisce nei backup.</div></div>
+ <div class="card"><h2>Privacy</h2><div class="sm">A ogni domanda l'app invia a Google un riepilogo dei tuoi numeri (risultati, buy-in, luoghi). I nomi dei backer non vengono mai inviati. Con il piano gratuito, Google può usare i contenuti ricevuti per migliorare i suoi prodotti.</div></div>`;
+ const quick=["Spiegami come si usa l'app",'Come registro un torneo con re-entry?','Analizza il mio andamento generale','Sto rispettando il bankroll management?','Dove sto perdendo soldi?','A che livello dovrei giocare adesso?','I miei risultati sono fortuna o bravura?'];
+ const log=AI.hist.map(m=>`<div class="msg ${m.r}">${m.r==='user'?esc(m.t).replace(/\n/g,'<br>'):md(m.t)}</div>`).join('');
+ return`<div class="card"><h2>${qh('ai')}Assistente AI</h2>${AI.hist.length?'':`<div class="sm mut">Chiedimi un'analisi dei tuoi dati o confrontati con me su bankroll, livelli, staking e varianza. A ogni domanda leggo i dati aggiornati dell'app.</div>`}
+ <div id="aiLog">${log}${UI.aiBusy?'<div class="msg model mut">Sto analizzando i tuoi dati…</div>':''}</div>
+ <div class="chips" style="margin-top:10px">${quick.map(q=>`<button class="chip" data-act="aiQuick" data-q="${esc(q)}" ${UI.aiBusy?'disabled':''}>${esc(q)}</button>`).join('')}</div>
+ <textarea id="aiIn" placeholder="Scrivi una domanda…" ${UI.aiBusy?'disabled':''}></textarea>
+ <button class="btn full" style="margin-top:8px" data-act="aiSend" ${UI.aiBusy?'disabled':''}>Invia</button></div>
+ <div class="card"><h2>Impostazioni assistente</h2>
+ <label>Modello</label><select onchange="AI.model=this.value;saveAI()">${AI.models.map(m=>opt(m.id,`${m.label} (${m.id})`,AI.model)).join('')}</select>
+ <div class="hint">Se ricevi un errore di limite raggiunto, scegli un modello "Flash-Lite": ha più richieste gratuite al giorno.</div>
+ <label class="chk"><input type="checkbox" ${AI.notes?'checked':''} onchange="AI.notes=this.checked;saveAI()">Invia anche le note delle sessioni (più contesto, meno privacy)</label>
+ <div class="btns" style="margin-top:10px"><button class="btn sec sm" data-act="aiModels">Aggiorna modelli</button><button class="btn sec sm" data-act="aiClear">Nuova chat</button><button class="btn dan sm" data-act="aiForget">Rimuovi chiave</button></div></div>`;
+}
+
 /* =================== Modale e azioni =================== */
 function openModal(html){$('#sheet').innerHTML=html;$('#modal').classList.add('open');$('#sheet').scrollTop=0;const f=$('#mform');if(f&&f.getAttribute('oninput'))f.dispatchEvent(new Event('input'))}
 function closeModal(){$('#modal').classList.remove('open');$('#sheet').innerHTML='';UI.fromLive=false}
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+$('#helpm').addEventListener('click',e=>{if(e.target.id==='helpm')closeHelp()});
 const ACT={
  tab:d=>{UI.tab=d.k;UI.sub=null;render();scrollTo(0,0)},
  sub:d=>{UI.tab='more';UI.sub=d.k;render();scrollTo(0,0)},
@@ -672,6 +987,23 @@ const ACT={
  exportData,importData:()=>$('#impFile').click(),wipe,
  saveSet:()=>{const o=Object.fromEntries(new FormData($('#sform')));S.settings.name=(o.name||'').trim();S.settings.currency=o.currency;save();render();alert('Salvato.')},
  st:d=>{UI.stat[d.g]=d.k;render()},
+ help:d=>openHelp(d.k),
+ closeHelp,
+ allGuide:()=>{closeHelp();closeModal();UI.tab='more';UI.sub='guide';render();scrollTo(0,0)},
+ newPool:()=>openModal(poolForm(null)),
+ editPool:d=>openModal(poolForm(S.pools.find(x=>x.id===d.id))),
+ viewPool:d=>openModal(poolView(d.id)),
+ savePool,delPool,
+ addP:()=>{$('#prows').insertAdjacentHTML('beforeend',personRow({name:'',res:0,exp:0}));poolPreview();const r=$('#prows').lastElementChild.querySelector('input');r&&r.focus()},
+ rmP:(d,el)=>{el.closest('.prow').remove();poolPreview()},
+ togglePaid:d=>{const p=S.pools.find(x=>x.id===d.id);p.settled=!p.settled;save();render();openModal(poolView(d.id))},
+ aiVerify,
+ aiSend:()=>aiSend(),
+ aiQuick:d=>aiSend(d.q),
+ askAI:()=>{const f=UI.stat;UI.tab='more';UI.sub='ai';render();scrollTo(0,0);if(AI.key)aiSend(`Analizza in modo critico le mie statistiche ${f.kind==='mtt'?'dei tornei':'del cash game'}${f.env!=='all'?' '+f.env:''}: il campione è sufficiente? Cosa funziona, cosa no, e cosa dovrei cambiare nella gestione del bankroll?`)},
+ aiModels:async()=>{try{await aiLoadModels();saveAI();render();alert('Elenco modelli aggiornato.')}catch(e){alert(aiErr(e))}},
+ aiClear:()=>{if(!confirm('Cancellare la conversazione?'))return;AI.hist=[];saveAI();render()},
+ aiForget:()=>{if(!confirm('Rimuovere la chiave Gemini da questo telefono?'))return;AI={key:'',model:'',models:[],notes:false,hist:[]};saveAI();render()},
 };
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const fn=ACT[el.dataset.act];if(!fn)return;e.preventDefault();fn(el.dataset,el)});
 setInterval(()=>{const t=$('#timer');if(t&&S.live)t.textContent=elapsed()},1000);
